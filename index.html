@@ -2,502 +2,279 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Leave a Note | Meta-Rooms</title>
+    <title>Leave a Note | Pro Meta-Engine</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;600;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;800&family=Inter:wght@400;900&display=swap" rel="stylesheet">
     <style>
         :root {
-            --p: #00ff88; --p-rgb: 0, 255, 136;
-            --bg: #010101; --card-bg: rgba(15, 15, 15, 0.95);
-            --border: rgba(255, 255, 255, 0.07);
-            --danger: #ff2255;
-            --text-main: #e0e0e0; --text-light: #888;
-            --grid-color: rgba(255, 255, 255, 0.02);
-            --grid-size: 80px;
+            --p: #00ff88; --p-glow: rgba(0, 255, 136, 0.3);
+            --bg: #000000; --ui: rgba(10, 10, 10, 0.9);
+            --border: rgba(255, 255, 255, 0.08);
+            --lib-color: #00d4ff; --book-color: #ffcc00;
         }
 
-        /* --- Global Reset & Base Styles --- */
         * { box-sizing: border-box; outline: none; -webkit-font-smoothing: antialiased; }
-        body, html { 
-            margin: 0; padding: 0; width: 100vw; height: 100vh; 
-            overflow: hidden; background: var(--bg); color: var(--text-main);
-            font-family: 'Inter', sans-serif; cursor: none !important;
-            user-select: none;
+        body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: var(--bg); color: white; font-family: 'Inter', sans-serif; cursor: crosshair; }
+
+        /* --- LOADING & TRANSITION --- */
+        #portal-fx {
+            position: fixed; inset: 0; background: #000; z-index: 100000;
+            display: none; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono'; font-size: 24px; color: var(--p);
         }
 
-        /* --- Custom Cursor --- */
-        #custom-cursor {
-            width: 12px; height: 12px; background: var(--p); border-radius: 50%;
-            position: fixed; pointer-events: none; z-index: 1000000;
-            box-shadow: 0 0 15px var(--p);
-            transition: transform 0.05s ease-out; /* Daha hızlı takip */
-        }
-
-        /* --- Main Stage & Camera --- */
-        #viewport { width: 100%; height: 100%; position: relative; overflow: hidden; }
+        /* --- CAMERA & STAGE --- */
+        #viewport { width: 100vw; height: 100vh; position: relative; overflow: hidden; background: radial-gradient(circle at center, #0a0a0a 0%, #000 100%); }
         #camera {
-            position: absolute;
-            width: 100000px; height: 100000px; /* Büyük dünya */
-            background-image: 
-                linear-gradient(var(--grid-color) 1px, transparent 1px),
-                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
-            background-size: var(--grid-size) var(--grid-size);
-            transform-origin: 0 0;
-            will-change: transform;
-            transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1); /* Yumuşak kamera geçişleri */
+            position: absolute; width: 200000px; height: 200000px;
+            background-image: radial-gradient(var(--border) 1px, transparent 1px);
+            background-size: 100px 100px; transform-origin: 0 0; will-change: transform;
         }
 
-        /* --- Top Bar: Room Navigation --- */
-        #top-bar {
-            position: fixed; top: 0; left: 0; width: 100%;
-            background: rgba(0,0,0,0.7); backdrop-filter: blur(15px);
-            padding: 15px 30px; border-bottom: 1px solid var(--border);
-            display: flex; align-items: center; justify-content: space-between;
-            z-index: 20000;
+        /* --- TOP NAVIGATION BAR --- */
+        #nav-bar {
+            position: fixed; top: 0; left: 0; width: 100%; padding: 20px 40px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            display: flex; justify-content: space-between; align-items: center; z-index: 5000;
+            border-bottom: 1px solid var(--border); backdrop-filter: blur(10px);
         }
-        #room-name {
-            font-family: 'JetBrains Mono', monospace; font-size: 18px;
-            color: var(--p); font-weight: bold; letter-spacing: 1px;
-            cursor: pointer;
-        }
-        #room-name:hover { text-decoration: underline; }
+        #room-info { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 20px; color: var(--p); text-transform: uppercase; letter-spacing: 2px; }
+        .back-btn { padding: 10px 20px; background: var(--p); color: #000; border-radius: 8px; font-weight: 900; cursor: pointer; text-decoration: none; font-size: 12px; }
 
-        /* --- HUD (Bottom Left) --- */
-        #hud {
-            position: fixed; bottom: 20px; left: 20px;
-            display: flex; gap: 10px; z-index: 15000; pointer-events: none;
-        }
-        .hud-chip {
-            background: var(--card-bg); border: 1px solid var(--border);
-            padding: 10px 18px; border-radius: 25px; font-size: 12px;
-            font-family: 'JetBrains Mono', monospace; color: var(--text-light);
-        }
-        .hud-chip span { color: var(--p); font-weight: bold; }
-
-        /* --- Context Menu (Right Click) --- */
-        #context-menu {
-            position: fixed; display: none; flex-direction: column; width: 220px;
-            background: var(--card-bg); backdrop-filter: blur(20px);
-            border: 1px solid var(--border); border-radius: 15px;
-            z-index: 50000; padding: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        .ctx-item {
-            padding: 12px 15px; display: flex; align-items: center; gap: 10px;
-            border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600;
-            color: var(--text-main);
-        }
-        .ctx-item:hover { background: var(--p); color: black; }
-        .ctx-divider { height: 1px; background: var(--border); margin: 5px 0; }
-
-        /* --- Modals (Pop-ups for input) --- */
-        #modal-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.85);
-            backdrop-filter: blur(10px); z-index: 40000; display: none;
-            align-items: center; justify-content: center;
-        }
-        .modal {
-            background: var(--card-bg); border: 1px solid var(--p);
-            padding: 40px; border-radius: 25px; width: 450px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
-        }
-        .modal input, .modal textarea {
-            width: 100%; background: #000; border: 1px solid #333;
-            color: var(--text-main); padding: 15px; margin-bottom: 15px;
-            border-radius: 10px; font-size: 15px;
-        }
-        .modal button {
-            width: 100%; padding: 15px; background: var(--p); border: none;
-            border-radius: 10px; font-weight: bold; color: black; cursor: pointer;
-            transition: 0.2s;
-        }
-        .modal button:hover { opacity: 0.9; }
-
-        /* --- Entities (Notes, Libraries, Books) --- */
+        /* --- ENTITIES (NOT, KÜTÜPHANE, KİTAP) --- */
         .entity {
-            position: absolute; padding: 20px; background: var(--card-bg);
-            border: 1px solid var(--border); border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-            transition: transform 0.2s ease-out;
-            min-width: 200px;
-            pointer-events: all;
+            position: absolute; padding: 25px; background: var(--ui);
+            border: 1px solid var(--border); border-radius: 20px;
+            min-width: 280px; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: all; box-shadow: 0 20px 40px rgba(0,0,0,0.4);
         }
-        .entity:hover { border-color: var(--p); transform: translateY(-5px); }
-        .entity h3 { margin: 0 0 8px 0; color: var(--p); font-size: 18px; }
-        .entity p { margin: 0; color: var(--text-light); font-size: 14px; line-height: 1.6; }
+        .entity:hover { border-color: var(--p); transform: scale(1.05) translateY(-5px); box-shadow: 0 0 30px var(--p-glow); }
+        .entity h3 { margin: 0 0 10px 0; font-weight: 900; font-size: 20px; letter-spacing: -0.5px; }
+        .entity p { margin: 0; color: #aaa; font-size: 14px; line-height: 1.6; }
 
-        /* Kütüphane Özel Stil */
-        .entity.library {
-            border-color: #00aaff;
-            box-shadow: 0 0 20px rgba(0, 170, 255, 0.3);
-            cursor: pointer;
+        .type-library { border-left: 5px solid var(--lib-color); cursor: pointer; }
+        .type-library h3 { color: var(--lib-color); }
+        .type-book { border-left: 5px solid var(--book-color); background: #1a1500; }
+        .type-book h3 { color: var(--book-color); }
+
+        /* --- CONTEXT MENU --- */
+        #ctx {
+            position: fixed; display: none; background: #0a0a0a; border: 1px solid var(--p);
+            border-radius: 12px; padding: 8px; z-index: 10000; width: 220px; box-shadow: 0 10px 30px rgba(0,0,0,1);
         }
-        .entity.library h3 { color: #00aaff; }
+        .ctx-item { padding: 12px 15px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .ctx-item:hover { background: var(--p); color: #000; }
 
-        /* Kitap Özel Stil */
-        .entity.book {
-            background: #200000; /* Kırmızı tonlarında kitap */
-            border-color: var(--danger);
-            color: var(--text-main);
+        /* --- MODAL --- */
+        #modal-ovl {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 20000;
+            display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px);
         }
-        .entity.book h3 { color: var(--danger); }
+        .modal { background: #050505; border: 1px solid var(--p); padding: 40px; border-radius: 30px; width: 450px; }
+        input, textarea { width: 100%; background: #111; border: 1px solid #333; color: white; padding: 18px; margin-bottom: 20px; border-radius: 12px; font-size: 16px; }
+        .save-btn { width: 100%; padding: 18px; background: var(--p); border: none; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 16px; }
 
+        /* --- HUD --- */
+        #hud { position: fixed; bottom: 20px; left: 20px; display: flex; gap: 10px; z-index: 1000; }
+        .chip { background: var(--ui); padding: 10px 20px; border-radius: 50px; border: 1px solid var(--border); font-size: 11px; font-family: 'JetBrains Mono'; color: #666; }
+        .chip span { color: var(--p); }
     </style>
 </head>
 <body>
 
-<div id="custom-cursor"></div>
+<div id="portal-fx">PORTAL AKTİF EDİLİYOR...</div>
 
-<div id="top-bar">
-    <div id="room-name" onclick="Engine.enterRoom('main')">ANA EVREN</div>
+<div id="nav-bar">
+    <div id="room-info">ANA EVREN</div>
+    <div class="back-btn" id="back-home" style="display:none" onclick="Engine.enterRoom('main')">← MERKEZE DÖN</div>
 </div>
 
 <div id="hud">
-    <div class="hud-chip">POS: <span id="hud-pos">0, 0</span></div>
-    <div class="hud-chip">ZOOM: <span id="hud-zoom">100%</span></div>
-    <div class="hud-chip" style="pointer-events:all; cursor:pointer" onclick="Engine.focusCenter()">🏠 SPAWN</div>
+    <div class="chip">COORD: <span id="val-xy">0, 0</span></div>
+    <div class="chip">ZOOM: <span id="val-z">100%</span></div>
 </div>
 
-<div id="context-menu">
-    <div class="ctx-item" data-type="note">📝 Not Bırak</div>
-    <div class="ctx-item" data-type="library">📚 Kütüphane Kur</div>
-    <div class="ctx-divider"></div>
-    <div class="ctx-item" data-type="admin" style="color:var(--danger)">⚙️ Admin Paneli</div>
+<div id="ctx">
+    <div class="ctx-item" id="ctx-note" onclick="Engine.openModal('note')">📝 Not Bırak</div>
+    <div class="ctx-item" id="ctx-lib" onclick="Engine.openModal('library')">📚 Kütüphane Kur</div>
 </div>
 
-<div id="modal-overlay">
+<div id="modal-ovl">
     <div class="modal">
-        <h2 id="modal-title" style="margin-top:0;">Yeni İçerik Ekle</h2>
-        <input type="text" id="modal-input-title" placeholder="Başlık (Örn: Mars Kütüphanesi)">
-        <textarea id="modal-input-content" rows="5" placeholder="İçerik (Örn: Uzay araştırmaları hakkında bilgiler...)"></textarea>
-        <button id="modal-submit-btn">YAYINLA</button>
-        <p onclick="Engine.closeModal()" style="text-align:center; color:var(--text-light); cursor:pointer; margin-top:20px;">İptal</p>
+        <h2 id="m-title" style="margin-top:0">Veri Girişi</h2>
+        <input type="text" id="m-input-t" placeholder="Başlık">
+        <textarea id="m-input-c" rows="5" placeholder="İçeriğinizi buraya yazın..."></textarea>
+        <button class="save-btn" onclick="Engine.save()">YAYINLA</button>
+        <p onclick="Engine.closeModal()" style="text-align:center; color:#444; cursor:pointer; margin-top:15px">Vazgeç</p>
     </div>
 </div>
 
 <div id="viewport">
     <div id="camera">
-        <div style="position:absolute; left:50000px; top:50000px; width:200px; height:200px; transform:translate(-50%,-50%); border:2px dashed var(--p); border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--p); font-weight:bold; font-size:20px; opacity:0.6;">SPAWN</div>
+        <div style="position:absolute; left:100000px; top:100000px; transform:translate(-50%,-50%); width:300px; height:300px; border:1px solid var(--p); border-radius:50%; opacity:0.2; pointer-events:none;"></div>
     </div>
 </div>
 
 <script>
-/**
- * LEAVE A NOTE: META-ROOMS ENGINE (v10.0)
- * Gelişmiş Dinamik Oda ve İçerik Yönetim Sistemi
- * Hasan için özel olarak detaylandırılmış ve optimize edilmiştir.
- */
 const Engine = {
-    // --- KONFİGÜRASYON PARAMETRELERİ ---
     config: {
         SB_URL: "https://ssfgvjudifodfhovhpzx.supabase.co",
         SB_KEY: "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo",
-        WORLD_SIZE: 100000, // Haritanın toplam genişlik/yüksekliği
-        SPAWN_COORD: 50000, // Başlangıç noktası
-        INITIAL_SCALE: 0.8, // Başlangıç zoom seviyesi
-        ZOOM_SPEED: 0.02,   // Her zoom adımında ölçek değişim miktarı
-        MAX_SCALE: 2.5, MIN_SCALE: 0.1, // Zoom sınırları
-        CAMERA_TRANSITION_TIME: '0.6s cubic-bezier(0.23, 1, 0.32, 1)' // Kamera animasyon süresi
+        CENTER: 100000
     },
 
-    // --- SİSTEM DURUM DEĞİŞKENLERİ ---
     state: {
-        db: null,           // Supabase istemcisi
-        cameraX: 0, cameraY: 0, // Kameranın mevcut pozisyonu
-        scale: 1,           // Mevcut zoom seviyesi
-        isDragging: false,  // Sürükleme durumu
-        lastMouse: { x: 0, y: 0 }, // Son mouse konumu (sürükleme için)
-        contextClickCoords: { x: 0, y: 0 }, // Sağ tıklandığında dünya koordinatları
-        currentRoomId: 'main', // Mevcut oda ID'si ('main' veya kütüphane ID'si)
-        activeModalType: null, // Açık olan modal'ın tipi ('note', 'library', 'book')
-        userId: localStorage.getItem('ln_meta_user_id') || `USR-${Math.random().toString(36).substr(2, 9)}` // Kullanıcı ID'si
+        db: null,
+        x: 0, y: 0, scale: 1,
+        isDrag: false, lastM: {x:0, y:0},
+        targetCoord: {x:0, y:0},
+        room: 'main',
+        mType: 'note'
     },
 
-    // --- SİSTEM BAŞLANGICI ---
     init: async function() {
-        console.log("OmniEngine v10.0 Başlatılıyor...");
         this.state.db = supabase.createClient(this.config.SB_URL, this.config.SB_KEY);
-        localStorage.setItem('ln_meta_user_id', this.state.userId);
-
-        this.setupInitialCamera();
-        this.bindGlobalEvents();
-        await this.loadEntities(this.state.currentRoomId); // Başlangıç odasını yükle
-        this.updateCameraTransform(false); // Kamera durumunu güncelle, animasyon olmasın
-        this.updateHUD();
+        this.bind();
+        this.spawn();
+        await this.load();
     },
 
-    // --- KAMERAYI BAŞLANGIÇ NOKTASINA AYARLA ---
-    setupInitialCamera: function() {
-        // Ekranın tam ortasını dünya merkezine hizala
-        this.state.scale = this.config.INITIAL_SCALE;
-        this.state.cameraX = -(this.config.SPAWN_COORD * this.state.scale) + (window.innerWidth / 2);
-        this.state.cameraY = -(this.config.SPAWN_COORD * this.state.scale) + (window.innerHeight / 2);
-    },
+    bind: function() {
+        const cam = document.getElementById('camera');
 
-    // --- KLOBAL OLAY DİNLEYİCİLERİ ---
-    bindGlobalEvents: function() {
-        const cameraElement = document.getElementById('camera');
-
-        // Mouse imleci takibi
-        window.addEventListener('mousemove', (e) => {
-            document.getElementById('custom-cursor').style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
-            this.updateMouseWorldCoords(e); // HUD için koordinatları güncelle
-
-            if (this.state.isDragging) {
-                this.state.cameraX += e.clientX - this.state.lastMouse.x;
-                this.state.cameraY += e.clientY - this.state.lastMouse.y;
-                this.state.lastMouse = { x: e.clientX, y: e.clientY };
-                this.updateCameraTransform(false); // Sürüklerken animasyon olmasın
+        window.onmousedown = (e) => {
+            if(e.button === 0 && (e.target.id === 'viewport' || e.target.id === 'camera')) {
+                this.state.isDrag = true;
+                this.state.lastM = {x: e.clientX, y: e.clientY};
+                cam.style.transition = "none";
             }
-        });
-
-        // Sürükleme Başlangıcı
-        window.addEventListener('mousedown', (e) => {
-            if (e.button === 0 && (e.target === cameraElement || e.target.closest('.entity') === null)) { // Notlara tıklayınca sürüklemeyi engelle
-                this.state.isDragging = true;
-                this.state.lastMouse = { x: e.clientX, y: e.clientY };
-                cameraElement.style.transition = 'none'; // Sürüklerken geçişi kapat
-            }
-        });
-
-        // Sürükleme Bitişi
-        window.addEventListener('mouseup', () => {
-            this.state.isDragging = false;
-            cameraElement.style.transition = this.config.CAMERA_TRANSITION_TIME; // Tekrar aç
-        });
-
-        // Zoom (Tekerlek)
-        window.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            cameraElement.style.transition = 'none'; // Zoom anlık olmalı
-            
-            const oldScale = this.state.scale;
-            const delta = e.deltaY > 0 ? -this.config.ZOOM_SPEED : this.config.ZOOM_SPEED;
-            let newScale = oldScale + delta;
-
-            newScale = Math.min(Math.max(this.config.MIN_SCALE, newScale), this.config.MAX_SCALE);
-
-            // Ekranın tam ortasını referans alarak zoom yap
-            const screenCenterX = window.innerWidth / 2;
-            const screenCenterY = window.innerHeight / 2;
-
-            this.state.cameraX = screenCenterX - (screenCenterX - this.state.cameraX) * (newScale / oldScale);
-            this.state.cameraY = screenCenterY - (screenCenterY - this.state.cameraY) * (newScale / oldScale);
-            
-            this.state.scale = newScale;
-            this.updateCameraTransform(false);
-            this.updateHUD();
-        }, { passive: false });
-
-        // Sağ Tık (Context Menu)
-        window.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            // Sağ tıklanan yerin dünya koordinatlarını kaydet
-            const cameraRect = cameraElement.getBoundingClientRect();
-            this.state.contextClickCoords = {
-                x: Math.round((e.clientX - cameraRect.left) / this.state.scale),
-                y: Math.round((e.clientY - cameraRect.top) / this.state.scale)
-            };
-
-            // Menüyü aç
-            const contextMenu = document.getElementById('context-menu');
-            contextMenu.style.display = 'flex';
-            contextMenu.style.left = `${e.clientX}px`;
-            contextMenu.style.top = `${e.clientY}px`;
-
-            // Eğer kütüphane odasındaysak "Kütüphane Kur" seçeneğini gizle, "Kitap Ekle" seçeneğini göster
-            const libraryOption = contextMenu.querySelector('[data-type="library"]');
-            const noteOption = contextMenu.querySelector('[data-type="note"]');
-            
-            if (this.state.currentRoomId !== 'main') {
-                if(libraryOption) libraryOption.style.display = 'none';
-                if(noteOption) noteOption.textContent = '📝 Not Bırak';
-                if(!contextMenu.querySelector('[data-type="book"]')) {
-                    const bookItem = document.createElement('div');
-                    bookItem.className = 'ctx-item';
-                    bookItem.setAttribute('data-type', 'book');
-                    bookItem.innerHTML = '📖 Kitap Ekle';
-                    bookItem.onclick = () => { Engine.openModal('book'); };
-                    contextMenu.insertBefore(bookItem, noteOption.nextSibling); // Not altına ekle
-                }
-            } else {
-                if(libraryOption) libraryOption.style.display = 'flex';
-                if(noteOption) noteOption.textContent = '📝 Not Bırak'; // Ana evrende not
-                const bookItem = contextMenu.querySelector('[data-type="book"]');
-                if(bookItem) bookItem.remove(); // Ana evrende kitabı kaldır
-            }
-        });
-
-        // Herhangi bir tıklamada menüyü kapat
-        window.addEventListener('click', () => {
-            document.getElementById('context-menu').style.display = 'none';
-        });
-
-        // Context menüdeki öğelere tıklama
-        document.querySelectorAll('#context-menu .ctx-item').forEach(item => {
-            item.onclick = (e) => {
-                const type = item.getAttribute('data-type');
-                if (type === 'admin') {
-                    // Admin paneli için ayrı bir akış başlat
-                    alert('Admin paneli daha sonra eklenecek.');
-                } else {
-                    this.openModal(type);
-                }
-                document.getElementById('context-menu').style.display = 'none';
-            };
-        });
-
-        // Modal'daki Yayınla butonuna tıklama
-        document.getElementById('modal-submit-btn').onclick = () => {
-            this.submitData();
         };
+        window.onmouseup = () => this.state.isDrag = false;
+
+        window.onmousemove = (e) => {
+            if(this.state.isDrag) {
+                this.state.x += (e.clientX - this.state.lastM.x);
+                this.state.y += (e.clientY - this.state.lastM.y);
+                this.state.lastM = {x: e.clientX, y: e.clientY};
+                this.update();
+            }
+            const rect = cam.getBoundingClientRect();
+            const wx = Math.round((e.clientX - rect.left) / this.state.scale);
+            const wy = Math.round((e.clientY - rect.top) / this.state.scale);
+            document.getElementById('val-xy').innerText = `${wx}, ${wy}`;
+        };
+
+        window.onwheel = (e) => {
+            e.preventDefault();
+            const zSpeed = 0.04;
+            const delta = e.deltaY > 0 ? -zSpeed : zSpeed;
+            const oldS = this.state.scale;
+            const newS = Math.min(Math.max(0.1, oldS + delta), 2);
+
+            const cx = window.innerWidth / 2;
+            const cy = window.innerHeight / 2;
+
+            this.state.x = cx - (cx - this.state.x) * (newS / oldS);
+            this.state.y = cy - (cy - this.state.y) * (newS / oldS);
+            this.state.scale = newS;
+            cam.style.transition = "none";
+            this.update();
+        };
+
+        window.oncontextmenu = (e) => {
+            e.preventDefault();
+            const rect = cam.getBoundingClientRect();
+            this.state.targetCoord = {
+                x: Math.round((e.clientX - rect.left) / this.state.scale),
+                y: Math.round((e.clientY - rect.top) / this.state.scale)
+            };
+            const m = document.getElementById('ctx');
+            m.style.display = 'block'; m.style.left = e.clientX + 'px'; m.style.top = e.clientY + 'px';
+        };
+
+        window.onclick = () => document.getElementById('ctx').style.display = 'none';
     },
 
-    // --- KAMERA POZİSYONUNU GÜNCELLE ---
-    updateCameraTransform: function(animated = true) {
-        const cameraElement = document.getElementById('camera');
-        cameraElement.style.transition = animated ? this.config.CAMERA_TRANSITION_TIME : 'none';
-        cameraElement.style.transform = `translate(${this.state.cameraX}px, ${this.state.cameraY}px) scale(${this.state.scale})`;
-        this.updateHUD(); // HUD'ı her kamera hareketinde güncelle
+    update: function() {
+        document.getElementById('camera').style.transform = `translate(${this.state.x}px, ${this.state.y}px) scale(${this.state.scale})`;
+        document.getElementById('val-z').innerText = Math.round(this.state.scale * 100) + "%";
     },
 
-    // --- HUD GÜNCELLEME ---
-    updateHUD: function() {
-        const cameraRect = document.getElementById('camera').getBoundingClientRect();
-        const screenCenterX = window.innerWidth / 2;
-        const screenCenterY = window.innerHeight / 2;
-        
-        const worldCenterX = Math.round((screenCenterX - cameraRect.left) / this.state.scale);
-        const worldCenterY = Math.round((screenCenterY - cameraRect.top) / this.state.scale);
-
-        document.getElementById('hud-pos').innerText = `${worldCenterX}, ${worldCenterY}`;
-        document.getElementById('hud-zoom').innerText = `${(this.state.scale * 100).toFixed(0)}%`;
-        document.getElementById('room-name').innerText = this.state.currentRoomId.toUpperCase();
+    spawn: function() {
+        this.state.scale = 0.8;
+        this.state.x = -(this.config.CENTER * 0.8) + (window.innerWidth / 2);
+        this.state.y = -(this.config.CENTER * 0.8) + (window.innerHeight / 2);
+        document.getElementById('camera').style.transition = "transform 1s cubic-bezier(0.19, 1, 0.22, 1)";
+        this.update();
     },
 
-    // --- FARE DÜNYA KOORDİNATLARINI GÜNCELLE ---
-    updateMouseWorldCoords: function(e) {
-        const cameraRect = document.getElementById('camera').getBoundingClientRect();
-        const worldX = Math.round((e.clientX - cameraRect.left) / this.state.scale);
-        const worldY = Math.round((e.clientY - cameraRect.top) / this.state.scale);
-        // Bu bilgi HUD'da gösterilebilir veya başka yerde kullanılabilir
-    },
-
-    // --- BELİRLİ BİR KOORDİNATA ODAKLAN ---
-    focusOnCoords: function(worldX, worldY, newScale = this.config.INITIAL_SCALE, animated = true) {
-        this.state.scale = newScale;
-        this.state.cameraX = -(worldX * this.state.scale) + (window.innerWidth / 2);
-        this.state.cameraY = -(worldY * this.state.scale) + (window.innerHeight / 2);
-        this.updateCameraTransform(animated);
-    },
-
-    // --- DÜNYA MERKEZİNE ODAKLAN (SPAWN) ---
-    focusCenter: function() {
-        this.focusOnCoords(this.config.SPAWN_COORD, this.config.SPAWN_COORD, this.config.INITIAL_SCALE, true);
-    },
-
-    // --- MODAL AÇ ---
     openModal: function(type) {
-        this.state.activeModalType = type;
-        document.getElementById('modal-title').innerText = 
-            type === 'note' ? 'Yeni Not Ekle' : 
-            type === 'library' ? 'Yeni Kütüphane Kur' : 
-            'Yeni Kitap Ekle';
-        document.getElementById('modal-overlay').style.display = 'flex';
+        this.state.mType = type;
+        document.getElementById('m-title').innerText = type === 'library' ? 'Yeni Kütüphane' : 'Yeni Not';
+        document.getElementById('modal-ovl').style.display = 'flex';
     },
 
-    // --- MODAL KAPAT ---
-    closeModal: function() {
-        document.getElementById('modal-overlay').style.display = 'none';
-        document.getElementById('modal-input-title').value = '';
-        document.getElementById('modal-input-content').value = '';
-        this.state.activeModalType = null;
-    },
+    closeModal: function() { document.getElementById('modal-ovl').style.display = 'none'; },
 
-    // --- VERİ GÖNDERME ---
-    submitData: async function() {
-        const title = document.getElementById('modal-input-title').value;
-        const content = document.getElementById('modal-input-content').value;
-        if (!title || !content) {
-            alert("Başlık ve içerik boş olamaz!");
-            return;
-        }
+    save: async function() {
+        const t = document.getElementById('m-input-t').value;
+        const c = document.getElementById('m-input-c').value;
+        if(!t || !c) return;
 
-        const itemData = {
-            type: this.state.activeModalType,
-            title: title,
-            content: content,
-            x: this.state.contextClickCoords.x,
-            y: this.state.contextClickCoords.y,
-            user_id: this.state.userId,
-            room_id: this.state.currentRoomId
+        const item = {
+            title: t, content: c, x: this.state.targetCoord.x, y: this.state.targetCoord.y,
+            type: this.state.mType, room_id: this.state.room
         };
 
-        const { data, error } = await this.state.db.from('items').insert([itemData]);
-
-        if (error) {
-            console.error("Veri kaydederken hata oluştu:", error.message);
-            alert("Veri kaydedilemedi: " + error.message);
-        } else {
-            console.log("Veri başarıyla kaydedildi:", data);
+        const { error } = await this.state.db.from('items').insert([item]);
+        if(error) alert("Hata: " + error.message);
+        else {
             this.closeModal();
-            this.renderEntity(itemData); // Yeni öğeyi haritaya ekle
-            this.focusOnCoords(itemData.x, itemData.y, this.config.INITIAL_SCALE, true); // Yeni öğeye odaklan
+            location.reload();
         }
     },
 
-    // --- ENTITY OLUŞTUR VE RENDER ET ---
-    renderEntity: function(item) {
-        // Eğer entity mevcut odaya aitse render et
-        if (item.room_id !== this.state.currentRoomId) return;
-
-        const entityDiv = document.createElement('div');
-        entityDiv.className = `entity ${item.type}`; // 'note', 'library', 'book'
-        entityDiv.style.left = `${item.x}px`;
-        entityDiv.style.top = `${item.y}px`;
-        entityDiv.innerHTML = `<h3>${item.title}</h3><p>${item.content}</p>`;
-        
-        // Kütüphaneye tıklama olayı ekle
-        if (item.type === 'library') {
-            entityDiv.onclick = (e) => {
-                e.stopPropagation(); // Sağ tık menüsünün açılmasını engelle
-                this.enterRoom(item.id); // Kütüphane odasına gir
-            };
-        }
-
-        document.getElementById('camera').appendChild(entityDiv);
+    load: async function() {
+        const { data } = await this.state.db.from('items').select('*').eq('room_id', this.state.room);
+        data?.forEach(item => {
+            const el = document.createElement('div');
+            el.className = `entity type-${item.type}`;
+            el.style.left = item.x + 'px'; el.style.top = item.y + 'px';
+            el.innerHTML = `<h3>${item.title}</h3><p>${item.content}</p>`;
+            
+            if(item.type === 'library') {
+                el.onclick = () => this.enterRoom(item.title);
+            }
+            document.getElementById('camera').appendChild(el);
+        });
     },
 
-    // --- VARLIKLARI (NOTLAR, KÜTÜPHANELER) YÜKLE ---
-    loadEntities: async function(roomId) {
-        document.getElementById('camera').innerHTML = ''; // Önceki tüm entity'leri temizle (odalar arası geçiş için)
-        const { data, error } = await this.state.db.from('items').select('*').eq('room_id', roomId);
+    enterRoom: function(roomName) {
+        const fx = document.getElementById('portal-fx');
+        fx.style.display = 'flex';
+        setTimeout(async () => {
+            this.state.room = roomName;
+            this.state.x = 0; this.state.y = 0; // Oda içi reset
+            document.getElementById('camera').innerHTML = ''; 
+            document.getElementById('room-info').innerText = roomName;
+            document.getElementById('back-home').style.display = roomName === 'main' ? 'none' : 'block';
+            
+            // Eğer yeni odaya girildiyse odaya özel spawn
+            if(roomName !== 'main') {
+                this.state.x = (window.innerWidth / 2) - 100000;
+                this.state.y = (window.innerHeight / 2) - 100000;
+            } else {
+                this.spawn();
+            }
 
-        if (error) {
-            console.error("Varlıklar yüklenirken hata oluştu:", error.message);
-            return;
-        }
-
-        data.forEach(item => this.renderEntity(item));
-        console.log(`Oda '${roomId}' için ${data.length} varlık yüklendi.`);
-    },
-
-    // --- ODAYA GİRİŞ YAP ---
-    enterRoom: async function(newRoomId) {
-        if (this.state.currentRoomId === newRoomId) return; // Zaten bu odadaysak bir şey yapma
-
-        this.state.currentRoomId = newRoomId;
-        document.getElementById('room-name').innerText = newRoomId === 'main' ? 'ANA EVREN' : `KÜTÜPHANE: ${newRoomId}`;
-        
-        await this.loadEntities(newRoomId); // Yeni odanın varlıklarını yükle
-        this.focusCenter(); // Her odaya girişte merkeze odaklan
-        console.log(`Odaya girildi: ${newRoomId}`);
+            await this.load();
+            this.update();
+            fx.style.display = 'none';
+        }, 800);
     }
 };
 
-// Sadece DOM tamamen yüklendiğinde Engine'i başlat
-document.addEventListener('DOMContentLoaded', () => {
-    Engine.init();
-});
+Engine.init();
 </script>
 </body>
 </html>
