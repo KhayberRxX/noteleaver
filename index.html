@@ -2,241 +2,188 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leave a Note | Precision Focus</title>
+    <title>Leave a Note | Stable Focus</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <style>
-        :root {
-            --p: #00ff88; --bg: #010101; --card: rgba(15, 15, 15, 0.98);
-            --border: rgba(255, 255, 255, 0.1);
-        }
+        :root { --p: #00ff88; --bg: #010101; --grid: rgba(255, 255, 255, 0.05); }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: sans-serif; }
 
-        * { box-sizing: border-box; outline: none; }
-        body, html { 
-            margin: 0; padding: 0; width: 100vw; height: 100vh; 
-            overflow: hidden; background: var(--bg); color: white;
-            font-family: 'Inter', sans-serif; cursor: crosshair;
-        }
-
-        /* --- HARİTA --- */
-        #viewport { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
-        #camera {
-            width: 200000px; height: 200000px; position: absolute;
-            background-image: 
-                radial-gradient(circle at center, #222 1px, transparent 1.5px),
-                linear-gradient(var(--border) 1px, transparent 1px),
-                linear-gradient(90deg, var(--border) 1px, transparent 1px);
-            background-size: 100px 100px;
-            transform-origin: center; /* ÖNEMLİ: Merkez odaklı büyüme */
-            will-change: transform;
-            transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
-        }
-
-        /* --- SPAWN --- */
-        #spawn {
-            position: absolute; left: 100000px; top: 100000px;
-            width: 150px; height: 150px; transform: translate(-50%, -50%);
-            border: 2px solid var(--p); border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 0 30px var(--p); color: var(--p); font-weight: 800;
-        }
-
-        /* --- HUD --- */
-        #hud {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 10px; z-index: 1000;
-        }
-        .chip {
-            background: var(--card); border: 1px solid var(--border);
-            padding: 8px 20px; border-radius: 30px; font-size: 12px;
-        }
-        .chip span { color: var(--p); font-weight: bold; }
-
-        /* --- SAĞ TIK & MODAL --- */
-        #ctx {
-            position: fixed; display: none; background: #111; border: 1px solid var(--p);
-            border-radius: 10px; padding: 10px; z-index: 5000;
-        }
-        .ctx-item { padding: 10px 20px; cursor: pointer; border-radius: 5px; }
-        .ctx-item:hover { background: var(--p); color: #000; }
-
-        .modal-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.8);
-            display: none; align-items: center; justify-content: center; z-index: 10000;
-        }
-        .modal { background: #0a0a0a; border: 1px solid var(--p); padding: 30px; border-radius: 20px; width: 400px; }
-        input, textarea { width: 100%; background: #000; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 10px; border-radius: 8px; }
+        /* --- STABILIZED VIEWPORT --- */
+        #viewport { width: 100vw; height: 100vh; position: relative; overflow: hidden; cursor: crosshair; }
         
-        .note-card {
-            position: absolute; padding: 20px; background: var(--card);
-            border: 1px solid var(--border); border-radius: 15px; width: 220px;
+        #camera {
+            position: absolute;
+            width: 100000px; height: 100000px;
+            background-image: 
+                linear-gradient(var(--grid) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+            background-size: 100px 100px;
+            transform-origin: 0 0; /* Hesaplamalar için 0,0'da kalmalı */
+            will-change: transform;
+            /* Transition zoom sırasında kapatılmalı, yoksa titreme yapar */
         }
+
+        /* --- UI & HUD --- */
+        #hud {
+            position: fixed; top: 15px; left: 50%; transform: translateX(-50%);
+            z-index: 100; display: flex; gap: 10px; pointer-events: none;
+        }
+        .hud-item { background: rgba(0,0,0,0.8); padding: 8px 15px; border-radius: 20px; color: #fff; font-size: 12px; border: 1px solid #333; }
+        .hud-item span { color: var(--p); font-weight: bold; }
+
+        /* --- NOTES --- */
+        .note {
+            position: absolute; padding: 15px; background: #111; border: 1px solid #333;
+            border-radius: 10px; color: #fff; min-width: 150px; pointer-events: all;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+
+        #ctx { position: fixed; display: none; background: #222; border: 1px solid var(--p); border-radius: 5px; padding: 5px; z-index: 1000; }
+        .ctx-item { padding: 8px 15px; color: #fff; cursor: pointer; border-radius: 3px; font-size: 13px; }
+        .ctx-item:hover { background: var(--p); color: #000; }
     </style>
 </head>
 <body>
 
 <div id="hud">
-    <div class="chip">COORD: <span id="val-xy">0, 0</span></div>
-    <div class="chip">ZOOM: <span id="val-z">1.0x</span></div>
-    <div class="chip" style="cursor:pointer" onclick="Engine.spawn()">🏠 Merkeze Git</div>
+    <div class="hud-item">POS: <span id="pos-display">0, 0</span></div>
+    <div class="hud-item">ZOOM: <span id="zoom-display">100%</span></div>
 </div>
 
 <div id="ctx"><div class="ctx-item" onclick="Engine.openModal()">📝 Buraya Not Bırak</div></div>
 
-<div class="modal-overlay" id="overlay">
-    <div class="modal">
-        <h3>Yeni Veri</h3>
-        <input type="text" id="in-t" placeholder="Başlık">
-        <textarea id="in-c" rows="4" placeholder="İçerik"></textarea>
-        <button onclick="Engine.save()" style="width:100%; padding:12px; background:var(--p); border:none; border-radius:8px; font-weight:bold; cursor:pointer">YAYINLA</button>
-    </div>
-</div>
-
 <div id="viewport">
     <div id="camera">
-        <div id="spawn">SPAWN</div>
+        <div style="position:absolute; left:50000px; top:50000px; color:var(--p); font-weight:bold; font-size:40px; transform:translate(-50%,-50%); border:2px solid var(--p); padding:20px; border-radius:50%">CENTER (SPAWN)</div>
     </div>
 </div>
-
-
 
 <script>
 const Engine = {
     config: {
         SB_URL: "https://ssfgvjudifodfhovhpzx.supabase.co",
         SB_KEY: "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo",
-        CENTER: 100000
+        CENTER: 50000
     },
 
     state: {
         db: null,
-        x: -100000 + (window.innerWidth / 2), 
-        y: -100000 + (window.innerHeight / 2), 
-        scale: 1,
-        isDrag: false, lastM: {x:0, y:0},
-        targetX: 0, targetY: 0
+        x: 0, y: 0, scale: 1,
+        isDragging: false,
+        lastMouse: { x: 0, y: 0 },
+        clickCoord: { x: 0, y: 0 }
     },
 
     init: async function() {
         this.state.db = supabase.createClient(this.config.SB_URL, this.config.SB_KEY);
-        this.bind();
-        this.load();
-        this.render();
+        
+        // İlk açılışta ekran ortasını merkeze kilitler
+        this.state.x = -(this.config.CENTER) + (window.innerWidth / 2);
+        this.state.y = -(this.config.CENTER) + (window.innerHeight / 2);
+
+        this.bindEvents();
+        this.loadNotes();
+        this.update();
     },
 
-    bind: function() {
-        // --- SÜRÜKLEME ---
+    bindEvents: function() {
+        const cam = document.getElementById('camera');
+
+        // --- SÜRÜKLEME MEKANİĞİ ---
         window.onmousedown = (e) => {
             if(e.button === 0) {
-                this.state.isDrag = true;
-                this.state.lastM = {x: e.clientX, y: e.clientY};
-                document.getElementById('camera').style.transition = "none";
+                this.state.isDragging = true;
+                this.state.lastMouse = { x: e.clientX, y: e.clientY };
+                cam.style.transition = "none"; // Sürüklerken animasyon olmasın
             }
-        };
-        window.onmouseup = () => this.state.isDrag = false;
-        
-        window.onmousemove = (e) => {
-            if(this.state.isDrag) {
-                this.state.x += (e.clientX - this.state.lastM.x);
-                this.state.y += (e.clientY - this.state.lastM.y);
-                this.state.lastM = {x: e.clientX, y: e.clientY};
-                this.render();
-            }
-            // Koordinat Takibi
-            const rect = document.getElementById('camera').getBoundingClientRect();
-            const wx = Math.round((e.clientX - rect.left) / this.state.scale);
-            const wy = Math.round((e.clientY - rect.top) / this.state.scale);
-            document.getElementById('val-xy').innerText = `${wx}, ${wy}`;
         };
 
-        // --- AKILLI VE YAVAŞ ZOOM (MERKEZ ODAKLI) ---
+        window.onmousemove = (e) => {
+            if (this.state.isDragging) {
+                this.state.x += e.clientX - this.state.lastMouse.x;
+                this.state.y += e.clientY - this.state.lastMouse.y;
+                this.state.lastMouse = { x: e.clientX, y: e.clientY };
+                this.update();
+            }
+            
+            // Koordinat Takibi
+            const wx = Math.round((e.clientX - this.state.x) / this.state.scale);
+            const wy = Math.round((e.clientY - this.state.y) / this.state.scale);
+            document.getElementById('pos-display').innerText = `${wx}, ${wy}`;
+        };
+
+        window.onmouseup = () => this.state.isDragging = false;
+
+        // --- DÜZELTİLMİŞ HASSAS ZOOM ---
         window.onwheel = (e) => {
             e.preventDefault();
-            const zoomSpeed = 0.05; // Daha az az büyümesi için çarpanı küçülttük
+            cam.style.transition = "none"; // Zoom anlık olmalı
+
+            const zoomSpeed = 0.02; // Çok küçük adım
             const delta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
             
             const oldScale = this.state.scale;
-            const newScale = Math.min(Math.max(0.1, oldScale + delta), 3);
-            
-            // Ekran ortasını baz alarak koordinatları koru
+            const newScale = Math.min(Math.max(0.2, oldScale + delta), 2.5);
+
+            // ZOOM ODAK NOKTASI: Ekranın tam ortası
             const centerX = window.innerWidth / 2;
             const centerY = window.innerHeight / 2;
 
-            // Merkeze göre zoom hesabı
+            // Koordinat stabilizasyon formülü
             this.state.x = centerX - (centerX - this.state.x) * (newScale / oldScale);
             this.state.y = centerY - (centerY - this.state.y) * (newScale / oldScale);
             
             this.state.scale = newScale;
-            document.getElementById('val-z').innerText = this.state.scale.toFixed(2) + 'x';
-            this.render();
+            this.update();
         };
 
-        // --- SAĞ TIK ---
+        // SAĞ TIK
         window.oncontextmenu = (e) => {
             e.preventDefault();
-            const rect = document.getElementById('camera').getBoundingClientRect();
-            this.state.targetX = Math.round((e.clientX - rect.left) / this.state.scale);
-            this.state.targetY = Math.round((e.clientY - rect.top) / this.state.scale);
-            
-            const m = document.getElementById('ctx');
-            m.style.display = 'block'; m.style.left = e.clientX + 'px'; m.style.top = e.clientY + 'px';
+            this.state.clickCoord = {
+                x: Math.round((e.clientX - this.state.x) / this.state.scale),
+                y: Math.round((e.clientY - this.state.y) / this.state.scale)
+            };
+            const menu = document.getElementById('ctx');
+            menu.style.display = 'block';
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
         };
-        window.onclick = () => {
-            document.getElementById('ctx').style.display = 'none';
-        };
+
+        window.onclick = () => document.getElementById('ctx').style.display = 'none';
     },
 
-    render: function() {
-        document.getElementById('camera').style.transform = `translate(${this.state.x}px, ${this.state.y}px) scale(${this.state.scale})`;
+    update: function() {
+        const cam = document.getElementById('camera');
+        cam.style.transform = `translate(${this.state.x}px, ${this.state.y}px) scale(${this.state.scale})`;
+        document.getElementById('zoom-display').innerText = Math.round(this.state.scale * 100) + "%";
     },
 
-    spawn: function() {
-        document.getElementById('camera').style.transition = "transform 0.8s cubic-bezier(0.19, 1, 0.22, 1)";
-        this.state.scale = 1;
-        this.state.x = -(this.config.CENTER) + (window.innerWidth / 2);
-        this.state.y = -(this.config.CENTER) + (window.innerHeight / 2);
-        this.render();
+    openModal: function() {
+        const title = prompt("Not Başlığı:");
+        const body = prompt("Not İçeriği:");
+        if (title && body) this.saveNote(title, body);
     },
 
-    openModal: function() { document.getElementById('overlay').style.display = 'flex'; },
-
-    save: async function() {
-        const title = document.getElementById('in-t').value;
-        const content = document.getElementById('in-c').value;
-        if(!title || !content) return;
-
+    saveNote: async function(t, b) {
         const { error } = await this.state.db.from('items').insert([{
-            title, content, x: this.state.targetX, y: this.state.targetY, user_id: 'Hasan'
+            title: t, content: b, 
+            x: this.state.clickCoord.x, 
+            y: this.state.clickCoord.y
         }]);
-
-        if(!error) {
-            document.getElementById('overlay').style.display = 'none';
-            // Notu render et
-            this.drawNote({title, content, x: this.state.targetX, y: this.state.targetY});
-            // Oraya odaklan
-            this.focus(this.state.targetX, this.state.targetY);
-        }
+        if(!error) location.reload();
     },
 
-    focus: function(wx, wy) {
-        document.getElementById('camera').style.transition = "transform 1s cubic-bezier(0.19, 1, 0.22, 1)";
-        this.state.scale = 1;
-        this.state.x = -(wx) + (window.innerWidth / 2);
-        this.state.y = -(wy) + (window.innerHeight / 2);
-        this.render();
-    },
-
-    drawNote: function(n) {
-        const div = document.createElement('div');
-        div.className = 'note-card';
-        div.style.left = n.x + 'px'; div.style.top = n.y + 'px';
-        div.innerHTML = `<h4>${n.title}</h4><p>${n.content}</p>`;
-        document.getElementById('camera').appendChild(div);
-    },
-
-    load: async function() {
+    loadNotes: async function() {
         const { data } = await this.state.db.from('items').select('*');
-        data?.forEach(n => this.drawNote(n));
+        data?.forEach(n => {
+            const div = document.createElement('div');
+            div.className = 'note';
+            div.style.left = n.x + 'px';
+            div.style.top = n.y + 'px';
+            div.innerHTML = `<strong>${n.title}</strong><br>${n.content}`;
+            document.getElementById('camera').appendChild(div);
+        });
     }
 };
 
