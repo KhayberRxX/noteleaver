@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Özgür Tuval | Hasan</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <style>
+        :root { --bg: #0b0b0b; --panel: #1a1a1a; --accent: #00ff88; --text: #e0e0e0; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; overflow: hidden; }
+        
+        /* Harita Alanı */
+        #map { width: 10000px; height: 10000px; position: relative; cursor: crosshair; background-image: radial-gradient(#333 1px, transparent 1px); background-size: 50px 50px; transition: 0.1s; }
+        
+        /* Sağ Tık / Sol Tık Menüsü */
+        #menu { position: absolute; background: var(--panel); border: 1px solid #444; border-radius: 8px; display: none; flex-direction: column; padding: 5px; z-index: 1000; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        #menu button { background: none; border: none; color: white; padding: 10px 20px; text-align: left; cursor: pointer; border-radius: 4px; }
+        #menu button:hover { background: var(--accent); color: black; }
+
+        /* Notların Görünümü */
+        .item { position: absolute; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; max-width: 200px; word-wrap: break-word; pointer-events: all; }
+        .item:hover { border-color: var(--accent); background: rgba(0, 255, 136, 0.1); }
+        .item .info { display: none; position: absolute; bottom: 100%; left: 0; background: #000; font-size: 10px; color: var(--accent); padding: 2px 5px; border-radius: 3px; white-space: nowrap; }
+        .item:hover .info { display: block; }
+
+        /* Modal Pencereleri */
+        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); padding: 25px; border-radius: 15px; z-index: 3000; border: 1px solid var(--accent); width: 320px; box-shadow: 0 0 20px rgba(0,255,136,0.2); }
+        .hidden { display: none !important; }
+        textarea, input { width: 100%; background: #000; color: white; border: 1px solid #444; padding: 10px; margin: 10px 0; border-radius: 5px; box-sizing: border-box; outline: none; }
+        
+        /* Arayüz Butonları */
+        #ui { position: fixed; top: 20px; left: 20px; z-index: 2000; display: flex; gap: 10px; pointer-events: none; }
+        .ui-box { background: rgba(26,26,26,0.9); padding: 8px 15px; border-radius: 20px; border: 1px solid #444; pointer-events: all; font-size: 13px; }
+        button.ui-box { cursor: pointer; color: white; transition: 0.3s; }
+        button.ui-box:hover { border-color: var(--accent); }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <div class="ui-box">Kimliğin: <span id="my-id" style="color:var(--accent)">...</span></div>
+    <div class="ui-box">📚 Kütüphane Hakkı: <span id="lib-count">3</span></div>
+    <button class="ui-box" onclick="showAdmin()">⚙️ Panel</button>
+</div>
+
+<div id="map"></div>
+
+<div id="menu">
+    <button onclick="openModal('note')">📝 Not Bırak</button>
+    <button onclick="openModal('draw')">🎨 Resim Yap</button>
+    <button onclick="useLibrary()">📚 Kütüphane Kur (5 TL)</button>
+</div>
+
+<div id="modal" class="modal hidden">
+    <h3 id="modal-title" style="margin-top:0">İçerik Ekle</h3>
+    <textarea id="user-input" rows="4" placeholder="Buraya yaz..."></textarea>
+    <button onclick="saveItem()" style="width:100%; padding:12px; background:var(--accent); border:none; border-radius:5px; cursor:pointer; font-weight:bold">YAYINLA</button>
+    <button onclick="closeModal()" style="width:100%; background:none; color:gray; border:none; margin-top:10px; cursor:pointer">Vazgeç</button>
+</div>
+
+<div id="admin-modal" class="modal hidden">
+    <h3 style="margin-top:0">Moderatör Girişi</h3>
+    <input type="password" id="admin-pass" placeholder="Şifre (Hasan0245)">
+    <button onclick="checkAdmin()" style="width:100%; padding:10px; background:var(--accent); border:none; border-radius:5px; cursor:pointer">Giriş</button>
+    <div id="admin-tools" class="hidden">
+        <hr style="border:0.5px solid #444; margin:15px 0">
+        <p style="color:red; font-size:12px">ADMİN YETKİSİ AKTİF</p>
+        <input type="text" id="target-id" placeholder="Banlanacak Kullanıcı ID">
+        <button onclick="alert('İşlem başarılı.')" style="color:red; background:none; border:1px solid red; width:100%; padding:5px; border-radius:5px; cursor:pointer">Kullanıcıyı Yasakla</button>
+    </div>
+    <button onclick="closeModal()" style="margin-top:10px; background:none; border:none; color:gray; cursor:pointer; width:100%">Kapat</button>
+</div>
+
+<script>
+    // --- SUPABASE BAĞLANTISI ---
+    const SUPABASE_URL = 'https://ssfgvjudifodfhovhpzx.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentX, currentY, currentType;
+    let userId = localStorage.getItem('userId') || "H-" + Math.floor(Math.random() * 9000 + 1000);
+    localStorage.setItem('userId', userId);
+    document.getElementById('my-id').innerText = userId;
+
+    const map = document.getElementById('map');
+    const menu = document.getElementById('menu');
+
+    // Haritaya tıklandığında menüyü göster
+    map.addEventListener('click', (e) => {
+        if(e.target !== map) return; // Notların üzerine tıklayınca menü açılmasın
+        currentX = e.pageX;
+        currentY = e.pageY;
+        menu.style.display = 'flex';
+        menu.style.left = currentX + 'px';
+        menu.style.top = currentY + 'px';
+    });
+
+    function openModal(type) {
+        currentType = type;
+        document.getElementById('modal-title').innerText = type === 'note' ? 'Yeni Not' : 'Kütüphane Oluştur';
+        document.getElementById('modal').classList.remove('hidden');
+        menu.style.display = 'none';
+    }
+
+    // Veritabanına Kaydet
+    async function saveItem() {
+        const content = document.getElementById('user-input').value;
+        if(!content) return;
+
+        const { error } = await supabase.from('items').insert([
+            { type: currentType, content: content, x: currentX, y: currentY, user_id: userId }
+        ]);
+
+        if(!error) {
+            renderItem(currentType, content, currentX, currentY, userId);
+            closeModal();
+            document.getElementById('user-input').value = "";
+        } else {
+            alert("Hata: " + error.message);
+        }
+    }
+
+    // Ekran Üzerine Notu Çiz
+    function renderItem(type, content, x, y, author) {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.style.left = x + 'px';
+        div.style.top = y + 'px';
+        
+        // Kütüphane ise farklı renk yapalım
+        if(type === 'library') div.style.borderLeft = "4px solid " + var(--accent);
+
+        div.innerHTML = `<span class="info">ID: ${author}</span> ${content}`;
+        
+        // Raporlama (Sağ Tık)
+        div.oncontextmenu = (e) => {
+            e.preventDefault();
+            if(confirm(author + " ID'li bu içeriği raporlamak istiyor musun?")) {
+                alert("Rapor moderatörlere iletildi.");
+            }
+        };
+
+        map.appendChild(div);
+    }
+
+    // Tüm Verileri Supabase'den Çek
+    async function loadData() {
+        const { data, error } = await supabase.from('items').select('*');
+        if(data) {
+            data.forEach(i => renderItem(i.type, i.content, i.x, i.y, i.user_id));
+        }
+    }
+
+    // Admin Şifre Kontrolü
+    function checkAdmin() {
+        const pass = document.getElementById('admin-pass').value;
+        if(pass === "Hasan0245") {
+            document.getElementById('admin-tools').classList.remove('hidden');
+        } else {
+            alert("Şifre Hatalı!");
+        }
+    }
+
+    // Kütüphane Hakkı Yönetimi
+    function useLibrary() {
+        let count = parseInt(document.getElementById('lib-count').innerText);
+        if(count > 0) {
+            document.getElementById('lib-count').innerText = count - 1;
+            openModal('library');
+        } else {
+            alert("Ücretsiz hakkın bitti. Yeni haklar için 5 TL ödeme yapmalısın.");
+        }
+    }
+
+    function showAdmin() { document.getElementById('admin-modal').classList.remove('hidden'); }
+    function closeModal() { document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden')); menu.style.display = 'none'; }
+
+    // Sayfa yüklendiğinde eski notları getir
+    window.onload = loadData;
+</script>
+
+</body>
+</html>
