@@ -2,192 +2,502 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Leave a Note | Stable Focus</title>
+    <title>Leave a Note | Meta-Rooms</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;600;900&display=swap" rel="stylesheet">
     <style>
-        :root { --p: #00ff88; --bg: #010101; --grid: rgba(255, 255, 255, 0.05); }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: sans-serif; }
+        :root {
+            --p: #00ff88; --p-rgb: 0, 255, 136;
+            --bg: #010101; --card-bg: rgba(15, 15, 15, 0.95);
+            --border: rgba(255, 255, 255, 0.07);
+            --danger: #ff2255;
+            --text-main: #e0e0e0; --text-light: #888;
+            --grid-color: rgba(255, 255, 255, 0.02);
+            --grid-size: 80px;
+        }
 
-        /* --- STABILIZED VIEWPORT --- */
-        #viewport { width: 100vw; height: 100vh; position: relative; overflow: hidden; cursor: crosshair; }
-        
+        /* --- Global Reset & Base Styles --- */
+        * { box-sizing: border-box; outline: none; -webkit-font-smoothing: antialiased; }
+        body, html { 
+            margin: 0; padding: 0; width: 100vw; height: 100vh; 
+            overflow: hidden; background: var(--bg); color: var(--text-main);
+            font-family: 'Inter', sans-serif; cursor: none !important;
+            user-select: none;
+        }
+
+        /* --- Custom Cursor --- */
+        #custom-cursor {
+            width: 12px; height: 12px; background: var(--p); border-radius: 50%;
+            position: fixed; pointer-events: none; z-index: 1000000;
+            box-shadow: 0 0 15px var(--p);
+            transition: transform 0.05s ease-out; /* Daha hızlı takip */
+        }
+
+        /* --- Main Stage & Camera --- */
+        #viewport { width: 100%; height: 100%; position: relative; overflow: hidden; }
         #camera {
             position: absolute;
-            width: 100000px; height: 100000px;
+            width: 100000px; height: 100000px; /* Büyük dünya */
             background-image: 
-                linear-gradient(var(--grid) 1px, transparent 1px),
-                linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-            background-size: 100px 100px;
-            transform-origin: 0 0; /* Hesaplamalar için 0,0'da kalmalı */
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: var(--grid-size) var(--grid-size);
+            transform-origin: 0 0;
             will-change: transform;
-            /* Transition zoom sırasında kapatılmalı, yoksa titreme yapar */
+            transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1); /* Yumuşak kamera geçişleri */
         }
 
-        /* --- UI & HUD --- */
+        /* --- Top Bar: Room Navigation --- */
+        #top-bar {
+            position: fixed; top: 0; left: 0; width: 100%;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(15px);
+            padding: 15px 30px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            z-index: 20000;
+        }
+        #room-name {
+            font-family: 'JetBrains Mono', monospace; font-size: 18px;
+            color: var(--p); font-weight: bold; letter-spacing: 1px;
+            cursor: pointer;
+        }
+        #room-name:hover { text-decoration: underline; }
+
+        /* --- HUD (Bottom Left) --- */
         #hud {
-            position: fixed; top: 15px; left: 50%; transform: translateX(-50%);
-            z-index: 100; display: flex; gap: 10px; pointer-events: none;
+            position: fixed; bottom: 20px; left: 20px;
+            display: flex; gap: 10px; z-index: 15000; pointer-events: none;
         }
-        .hud-item { background: rgba(0,0,0,0.8); padding: 8px 15px; border-radius: 20px; color: #fff; font-size: 12px; border: 1px solid #333; }
-        .hud-item span { color: var(--p); font-weight: bold; }
-
-        /* --- NOTES --- */
-        .note {
-            position: absolute; padding: 15px; background: #111; border: 1px solid #333;
-            border-radius: 10px; color: #fff; min-width: 150px; pointer-events: all;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        .hud-chip {
+            background: var(--card-bg); border: 1px solid var(--border);
+            padding: 10px 18px; border-radius: 25px; font-size: 12px;
+            font-family: 'JetBrains Mono', monospace; color: var(--text-light);
         }
+        .hud-chip span { color: var(--p); font-weight: bold; }
 
-        #ctx { position: fixed; display: none; background: #222; border: 1px solid var(--p); border-radius: 5px; padding: 5px; z-index: 1000; }
-        .ctx-item { padding: 8px 15px; color: #fff; cursor: pointer; border-radius: 3px; font-size: 13px; }
-        .ctx-item:hover { background: var(--p); color: #000; }
+        /* --- Context Menu (Right Click) --- */
+        #context-menu {
+            position: fixed; display: none; flex-direction: column; width: 220px;
+            background: var(--card-bg); backdrop-filter: blur(20px);
+            border: 1px solid var(--border); border-radius: 15px;
+            z-index: 50000; padding: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .ctx-item {
+            padding: 12px 15px; display: flex; align-items: center; gap: 10px;
+            border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600;
+            color: var(--text-main);
+        }
+        .ctx-item:hover { background: var(--p); color: black; }
+        .ctx-divider { height: 1px; background: var(--border); margin: 5px 0; }
+
+        /* --- Modals (Pop-ups for input) --- */
+        #modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px); z-index: 40000; display: none;
+            align-items: center; justify-content: center;
+        }
+        .modal {
+            background: var(--card-bg); border: 1px solid var(--p);
+            padding: 40px; border-radius: 25px; width: 450px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+        }
+        .modal input, .modal textarea {
+            width: 100%; background: #000; border: 1px solid #333;
+            color: var(--text-main); padding: 15px; margin-bottom: 15px;
+            border-radius: 10px; font-size: 15px;
+        }
+        .modal button {
+            width: 100%; padding: 15px; background: var(--p); border: none;
+            border-radius: 10px; font-weight: bold; color: black; cursor: pointer;
+            transition: 0.2s;
+        }
+        .modal button:hover { opacity: 0.9; }
+
+        /* --- Entities (Notes, Libraries, Books) --- */
+        .entity {
+            position: absolute; padding: 20px; background: var(--card-bg);
+            border: 1px solid var(--border); border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            transition: transform 0.2s ease-out;
+            min-width: 200px;
+            pointer-events: all;
+        }
+        .entity:hover { border-color: var(--p); transform: translateY(-5px); }
+        .entity h3 { margin: 0 0 8px 0; color: var(--p); font-size: 18px; }
+        .entity p { margin: 0; color: var(--text-light); font-size: 14px; line-height: 1.6; }
+
+        /* Kütüphane Özel Stil */
+        .entity.library {
+            border-color: #00aaff;
+            box-shadow: 0 0 20px rgba(0, 170, 255, 0.3);
+            cursor: pointer;
+        }
+        .entity.library h3 { color: #00aaff; }
+
+        /* Kitap Özel Stil */
+        .entity.book {
+            background: #200000; /* Kırmızı tonlarında kitap */
+            border-color: var(--danger);
+            color: var(--text-main);
+        }
+        .entity.book h3 { color: var(--danger); }
+
     </style>
 </head>
 <body>
 
-<div id="hud">
-    <div class="hud-item">POS: <span id="pos-display">0, 0</span></div>
-    <div class="hud-item">ZOOM: <span id="zoom-display">100%</span></div>
+<div id="custom-cursor"></div>
+
+<div id="top-bar">
+    <div id="room-name" onclick="Engine.enterRoom('main')">ANA EVREN</div>
 </div>
 
-<div id="ctx"><div class="ctx-item" onclick="Engine.openModal()">📝 Buraya Not Bırak</div></div>
+<div id="hud">
+    <div class="hud-chip">POS: <span id="hud-pos">0, 0</span></div>
+    <div class="hud-chip">ZOOM: <span id="hud-zoom">100%</span></div>
+    <div class="hud-chip" style="pointer-events:all; cursor:pointer" onclick="Engine.focusCenter()">🏠 SPAWN</div>
+</div>
+
+<div id="context-menu">
+    <div class="ctx-item" data-type="note">📝 Not Bırak</div>
+    <div class="ctx-item" data-type="library">📚 Kütüphane Kur</div>
+    <div class="ctx-divider"></div>
+    <div class="ctx-item" data-type="admin" style="color:var(--danger)">⚙️ Admin Paneli</div>
+</div>
+
+<div id="modal-overlay">
+    <div class="modal">
+        <h2 id="modal-title" style="margin-top:0;">Yeni İçerik Ekle</h2>
+        <input type="text" id="modal-input-title" placeholder="Başlık (Örn: Mars Kütüphanesi)">
+        <textarea id="modal-input-content" rows="5" placeholder="İçerik (Örn: Uzay araştırmaları hakkında bilgiler...)"></textarea>
+        <button id="modal-submit-btn">YAYINLA</button>
+        <p onclick="Engine.closeModal()" style="text-align:center; color:var(--text-light); cursor:pointer; margin-top:20px;">İptal</p>
+    </div>
+</div>
 
 <div id="viewport">
     <div id="camera">
-        <div style="position:absolute; left:50000px; top:50000px; color:var(--p); font-weight:bold; font-size:40px; transform:translate(-50%,-50%); border:2px solid var(--p); padding:20px; border-radius:50%">CENTER (SPAWN)</div>
+        <div style="position:absolute; left:50000px; top:50000px; width:200px; height:200px; transform:translate(-50%,-50%); border:2px dashed var(--p); border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--p); font-weight:bold; font-size:20px; opacity:0.6;">SPAWN</div>
     </div>
 </div>
 
 <script>
+/**
+ * LEAVE A NOTE: META-ROOMS ENGINE (v10.0)
+ * Gelişmiş Dinamik Oda ve İçerik Yönetim Sistemi
+ * Hasan için özel olarak detaylandırılmış ve optimize edilmiştir.
+ */
 const Engine = {
+    // --- KONFİGÜRASYON PARAMETRELERİ ---
     config: {
         SB_URL: "https://ssfgvjudifodfhovhpzx.supabase.co",
         SB_KEY: "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo",
-        CENTER: 50000
+        WORLD_SIZE: 100000, // Haritanın toplam genişlik/yüksekliği
+        SPAWN_COORD: 50000, // Başlangıç noktası
+        INITIAL_SCALE: 0.8, // Başlangıç zoom seviyesi
+        ZOOM_SPEED: 0.02,   // Her zoom adımında ölçek değişim miktarı
+        MAX_SCALE: 2.5, MIN_SCALE: 0.1, // Zoom sınırları
+        CAMERA_TRANSITION_TIME: '0.6s cubic-bezier(0.23, 1, 0.32, 1)' // Kamera animasyon süresi
     },
 
+    // --- SİSTEM DURUM DEĞİŞKENLERİ ---
     state: {
-        db: null,
-        x: 0, y: 0, scale: 1,
-        isDragging: false,
-        lastMouse: { x: 0, y: 0 },
-        clickCoord: { x: 0, y: 0 }
+        db: null,           // Supabase istemcisi
+        cameraX: 0, cameraY: 0, // Kameranın mevcut pozisyonu
+        scale: 1,           // Mevcut zoom seviyesi
+        isDragging: false,  // Sürükleme durumu
+        lastMouse: { x: 0, y: 0 }, // Son mouse konumu (sürükleme için)
+        contextClickCoords: { x: 0, y: 0 }, // Sağ tıklandığında dünya koordinatları
+        currentRoomId: 'main', // Mevcut oda ID'si ('main' veya kütüphane ID'si)
+        activeModalType: null, // Açık olan modal'ın tipi ('note', 'library', 'book')
+        userId: localStorage.getItem('ln_meta_user_id') || `USR-${Math.random().toString(36).substr(2, 9)}` // Kullanıcı ID'si
     },
 
+    // --- SİSTEM BAŞLANGICI ---
     init: async function() {
+        console.log("OmniEngine v10.0 Başlatılıyor...");
         this.state.db = supabase.createClient(this.config.SB_URL, this.config.SB_KEY);
-        
-        // İlk açılışta ekran ortasını merkeze kilitler
-        this.state.x = -(this.config.CENTER) + (window.innerWidth / 2);
-        this.state.y = -(this.config.CENTER) + (window.innerHeight / 2);
+        localStorage.setItem('ln_meta_user_id', this.state.userId);
 
-        this.bindEvents();
-        this.loadNotes();
-        this.update();
+        this.setupInitialCamera();
+        this.bindGlobalEvents();
+        await this.loadEntities(this.state.currentRoomId); // Başlangıç odasını yükle
+        this.updateCameraTransform(false); // Kamera durumunu güncelle, animasyon olmasın
+        this.updateHUD();
     },
 
-    bindEvents: function() {
-        const cam = document.getElementById('camera');
+    // --- KAMERAYI BAŞLANGIÇ NOKTASINA AYARLA ---
+    setupInitialCamera: function() {
+        // Ekranın tam ortasını dünya merkezine hizala
+        this.state.scale = this.config.INITIAL_SCALE;
+        this.state.cameraX = -(this.config.SPAWN_COORD * this.state.scale) + (window.innerWidth / 2);
+        this.state.cameraY = -(this.config.SPAWN_COORD * this.state.scale) + (window.innerHeight / 2);
+    },
 
-        // --- SÜRÜKLEME MEKANİĞİ ---
-        window.onmousedown = (e) => {
-            if(e.button === 0) {
+    // --- KLOBAL OLAY DİNLEYİCİLERİ ---
+    bindGlobalEvents: function() {
+        const cameraElement = document.getElementById('camera');
+
+        // Mouse imleci takibi
+        window.addEventListener('mousemove', (e) => {
+            document.getElementById('custom-cursor').style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+            this.updateMouseWorldCoords(e); // HUD için koordinatları güncelle
+
+            if (this.state.isDragging) {
+                this.state.cameraX += e.clientX - this.state.lastMouse.x;
+                this.state.cameraY += e.clientY - this.state.lastMouse.y;
+                this.state.lastMouse = { x: e.clientX, y: e.clientY };
+                this.updateCameraTransform(false); // Sürüklerken animasyon olmasın
+            }
+        });
+
+        // Sürükleme Başlangıcı
+        window.addEventListener('mousedown', (e) => {
+            if (e.button === 0 && (e.target === cameraElement || e.target.closest('.entity') === null)) { // Notlara tıklayınca sürüklemeyi engelle
                 this.state.isDragging = true;
                 this.state.lastMouse = { x: e.clientX, y: e.clientY };
-                cam.style.transition = "none"; // Sürüklerken animasyon olmasın
+                cameraElement.style.transition = 'none'; // Sürüklerken geçişi kapat
             }
-        };
+        });
 
-        window.onmousemove = (e) => {
-            if (this.state.isDragging) {
-                this.state.x += e.clientX - this.state.lastMouse.x;
-                this.state.y += e.clientY - this.state.lastMouse.y;
-                this.state.lastMouse = { x: e.clientX, y: e.clientY };
-                this.update();
-            }
-            
-            // Koordinat Takibi
-            const wx = Math.round((e.clientX - this.state.x) / this.state.scale);
-            const wy = Math.round((e.clientY - this.state.y) / this.state.scale);
-            document.getElementById('pos-display').innerText = `${wx}, ${wy}`;
-        };
+        // Sürükleme Bitişi
+        window.addEventListener('mouseup', () => {
+            this.state.isDragging = false;
+            cameraElement.style.transition = this.config.CAMERA_TRANSITION_TIME; // Tekrar aç
+        });
 
-        window.onmouseup = () => this.state.isDragging = false;
-
-        // --- DÜZELTİLMİŞ HASSAS ZOOM ---
-        window.onwheel = (e) => {
+        // Zoom (Tekerlek)
+        window.addEventListener('wheel', (e) => {
             e.preventDefault();
-            cam.style.transition = "none"; // Zoom anlık olmalı
-
-            const zoomSpeed = 0.02; // Çok küçük adım
-            const delta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+            cameraElement.style.transition = 'none'; // Zoom anlık olmalı
             
             const oldScale = this.state.scale;
-            const newScale = Math.min(Math.max(0.2, oldScale + delta), 2.5);
+            const delta = e.deltaY > 0 ? -this.config.ZOOM_SPEED : this.config.ZOOM_SPEED;
+            let newScale = oldScale + delta;
 
-            // ZOOM ODAK NOKTASI: Ekranın tam ortası
-            const centerX = window.innerWidth / 2;
-            const centerY = window.innerHeight / 2;
+            newScale = Math.min(Math.max(this.config.MIN_SCALE, newScale), this.config.MAX_SCALE);
 
-            // Koordinat stabilizasyon formülü
-            this.state.x = centerX - (centerX - this.state.x) * (newScale / oldScale);
-            this.state.y = centerY - (centerY - this.state.y) * (newScale / oldScale);
+            // Ekranın tam ortasını referans alarak zoom yap
+            const screenCenterX = window.innerWidth / 2;
+            const screenCenterY = window.innerHeight / 2;
+
+            this.state.cameraX = screenCenterX - (screenCenterX - this.state.cameraX) * (newScale / oldScale);
+            this.state.cameraY = screenCenterY - (screenCenterY - this.state.cameraY) * (newScale / oldScale);
             
             this.state.scale = newScale;
-            this.update();
-        };
+            this.updateCameraTransform(false);
+            this.updateHUD();
+        }, { passive: false });
 
-        // SAĞ TIK
-        window.oncontextmenu = (e) => {
+        // Sağ Tık (Context Menu)
+        window.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            this.state.clickCoord = {
-                x: Math.round((e.clientX - this.state.x) / this.state.scale),
-                y: Math.round((e.clientY - this.state.y) / this.state.scale)
+            // Sağ tıklanan yerin dünya koordinatlarını kaydet
+            const cameraRect = cameraElement.getBoundingClientRect();
+            this.state.contextClickCoords = {
+                x: Math.round((e.clientX - cameraRect.left) / this.state.scale),
+                y: Math.round((e.clientY - cameraRect.top) / this.state.scale)
             };
-            const menu = document.getElementById('ctx');
-            menu.style.display = 'block';
-            menu.style.left = e.clientX + 'px';
-            menu.style.top = e.clientY + 'px';
+
+            // Menüyü aç
+            const contextMenu = document.getElementById('context-menu');
+            contextMenu.style.display = 'flex';
+            contextMenu.style.left = `${e.clientX}px`;
+            contextMenu.style.top = `${e.clientY}px`;
+
+            // Eğer kütüphane odasındaysak "Kütüphane Kur" seçeneğini gizle, "Kitap Ekle" seçeneğini göster
+            const libraryOption = contextMenu.querySelector('[data-type="library"]');
+            const noteOption = contextMenu.querySelector('[data-type="note"]');
+            
+            if (this.state.currentRoomId !== 'main') {
+                if(libraryOption) libraryOption.style.display = 'none';
+                if(noteOption) noteOption.textContent = '📝 Not Bırak';
+                if(!contextMenu.querySelector('[data-type="book"]')) {
+                    const bookItem = document.createElement('div');
+                    bookItem.className = 'ctx-item';
+                    bookItem.setAttribute('data-type', 'book');
+                    bookItem.innerHTML = '📖 Kitap Ekle';
+                    bookItem.onclick = () => { Engine.openModal('book'); };
+                    contextMenu.insertBefore(bookItem, noteOption.nextSibling); // Not altına ekle
+                }
+            } else {
+                if(libraryOption) libraryOption.style.display = 'flex';
+                if(noteOption) noteOption.textContent = '📝 Not Bırak'; // Ana evrende not
+                const bookItem = contextMenu.querySelector('[data-type="book"]');
+                if(bookItem) bookItem.remove(); // Ana evrende kitabı kaldır
+            }
+        });
+
+        // Herhangi bir tıklamada menüyü kapat
+        window.addEventListener('click', () => {
+            document.getElementById('context-menu').style.display = 'none';
+        });
+
+        // Context menüdeki öğelere tıklama
+        document.querySelectorAll('#context-menu .ctx-item').forEach(item => {
+            item.onclick = (e) => {
+                const type = item.getAttribute('data-type');
+                if (type === 'admin') {
+                    // Admin paneli için ayrı bir akış başlat
+                    alert('Admin paneli daha sonra eklenecek.');
+                } else {
+                    this.openModal(type);
+                }
+                document.getElementById('context-menu').style.display = 'none';
+            };
+        });
+
+        // Modal'daki Yayınla butonuna tıklama
+        document.getElementById('modal-submit-btn').onclick = () => {
+            this.submitData();
+        };
+    },
+
+    // --- KAMERA POZİSYONUNU GÜNCELLE ---
+    updateCameraTransform: function(animated = true) {
+        const cameraElement = document.getElementById('camera');
+        cameraElement.style.transition = animated ? this.config.CAMERA_TRANSITION_TIME : 'none';
+        cameraElement.style.transform = `translate(${this.state.cameraX}px, ${this.state.cameraY}px) scale(${this.state.scale})`;
+        this.updateHUD(); // HUD'ı her kamera hareketinde güncelle
+    },
+
+    // --- HUD GÜNCELLEME ---
+    updateHUD: function() {
+        const cameraRect = document.getElementById('camera').getBoundingClientRect();
+        const screenCenterX = window.innerWidth / 2;
+        const screenCenterY = window.innerHeight / 2;
+        
+        const worldCenterX = Math.round((screenCenterX - cameraRect.left) / this.state.scale);
+        const worldCenterY = Math.round((screenCenterY - cameraRect.top) / this.state.scale);
+
+        document.getElementById('hud-pos').innerText = `${worldCenterX}, ${worldCenterY}`;
+        document.getElementById('hud-zoom').innerText = `${(this.state.scale * 100).toFixed(0)}%`;
+        document.getElementById('room-name').innerText = this.state.currentRoomId.toUpperCase();
+    },
+
+    // --- FARE DÜNYA KOORDİNATLARINI GÜNCELLE ---
+    updateMouseWorldCoords: function(e) {
+        const cameraRect = document.getElementById('camera').getBoundingClientRect();
+        const worldX = Math.round((e.clientX - cameraRect.left) / this.state.scale);
+        const worldY = Math.round((e.clientY - cameraRect.top) / this.state.scale);
+        // Bu bilgi HUD'da gösterilebilir veya başka yerde kullanılabilir
+    },
+
+    // --- BELİRLİ BİR KOORDİNATA ODAKLAN ---
+    focusOnCoords: function(worldX, worldY, newScale = this.config.INITIAL_SCALE, animated = true) {
+        this.state.scale = newScale;
+        this.state.cameraX = -(worldX * this.state.scale) + (window.innerWidth / 2);
+        this.state.cameraY = -(worldY * this.state.scale) + (window.innerHeight / 2);
+        this.updateCameraTransform(animated);
+    },
+
+    // --- DÜNYA MERKEZİNE ODAKLAN (SPAWN) ---
+    focusCenter: function() {
+        this.focusOnCoords(this.config.SPAWN_COORD, this.config.SPAWN_COORD, this.config.INITIAL_SCALE, true);
+    },
+
+    // --- MODAL AÇ ---
+    openModal: function(type) {
+        this.state.activeModalType = type;
+        document.getElementById('modal-title').innerText = 
+            type === 'note' ? 'Yeni Not Ekle' : 
+            type === 'library' ? 'Yeni Kütüphane Kur' : 
+            'Yeni Kitap Ekle';
+        document.getElementById('modal-overlay').style.display = 'flex';
+    },
+
+    // --- MODAL KAPAT ---
+    closeModal: function() {
+        document.getElementById('modal-overlay').style.display = 'none';
+        document.getElementById('modal-input-title').value = '';
+        document.getElementById('modal-input-content').value = '';
+        this.state.activeModalType = null;
+    },
+
+    // --- VERİ GÖNDERME ---
+    submitData: async function() {
+        const title = document.getElementById('modal-input-title').value;
+        const content = document.getElementById('modal-input-content').value;
+        if (!title || !content) {
+            alert("Başlık ve içerik boş olamaz!");
+            return;
+        }
+
+        const itemData = {
+            type: this.state.activeModalType,
+            title: title,
+            content: content,
+            x: this.state.contextClickCoords.x,
+            y: this.state.contextClickCoords.y,
+            user_id: this.state.userId,
+            room_id: this.state.currentRoomId
         };
 
-        window.onclick = () => document.getElementById('ctx').style.display = 'none';
+        const { data, error } = await this.state.db.from('items').insert([itemData]);
+
+        if (error) {
+            console.error("Veri kaydederken hata oluştu:", error.message);
+            alert("Veri kaydedilemedi: " + error.message);
+        } else {
+            console.log("Veri başarıyla kaydedildi:", data);
+            this.closeModal();
+            this.renderEntity(itemData); // Yeni öğeyi haritaya ekle
+            this.focusOnCoords(itemData.x, itemData.y, this.config.INITIAL_SCALE, true); // Yeni öğeye odaklan
+        }
     },
 
-    update: function() {
-        const cam = document.getElementById('camera');
-        cam.style.transform = `translate(${this.state.x}px, ${this.state.y}px) scale(${this.state.scale})`;
-        document.getElementById('zoom-display').innerText = Math.round(this.state.scale * 100) + "%";
+    // --- ENTITY OLUŞTUR VE RENDER ET ---
+    renderEntity: function(item) {
+        // Eğer entity mevcut odaya aitse render et
+        if (item.room_id !== this.state.currentRoomId) return;
+
+        const entityDiv = document.createElement('div');
+        entityDiv.className = `entity ${item.type}`; // 'note', 'library', 'book'
+        entityDiv.style.left = `${item.x}px`;
+        entityDiv.style.top = `${item.y}px`;
+        entityDiv.innerHTML = `<h3>${item.title}</h3><p>${item.content}</p>`;
+        
+        // Kütüphaneye tıklama olayı ekle
+        if (item.type === 'library') {
+            entityDiv.onclick = (e) => {
+                e.stopPropagation(); // Sağ tık menüsünün açılmasını engelle
+                this.enterRoom(item.id); // Kütüphane odasına gir
+            };
+        }
+
+        document.getElementById('camera').appendChild(entityDiv);
     },
 
-    openModal: function() {
-        const title = prompt("Not Başlığı:");
-        const body = prompt("Not İçeriği:");
-        if (title && body) this.saveNote(title, body);
+    // --- VARLIKLARI (NOTLAR, KÜTÜPHANELER) YÜKLE ---
+    loadEntities: async function(roomId) {
+        document.getElementById('camera').innerHTML = ''; // Önceki tüm entity'leri temizle (odalar arası geçiş için)
+        const { data, error } = await this.state.db.from('items').select('*').eq('room_id', roomId);
+
+        if (error) {
+            console.error("Varlıklar yüklenirken hata oluştu:", error.message);
+            return;
+        }
+
+        data.forEach(item => this.renderEntity(item));
+        console.log(`Oda '${roomId}' için ${data.length} varlık yüklendi.`);
     },
 
-    saveNote: async function(t, b) {
-        const { error } = await this.state.db.from('items').insert([{
-            title: t, content: b, 
-            x: this.state.clickCoord.x, 
-            y: this.state.clickCoord.y
-        }]);
-        if(!error) location.reload();
-    },
+    // --- ODAYA GİRİŞ YAP ---
+    enterRoom: async function(newRoomId) {
+        if (this.state.currentRoomId === newRoomId) return; // Zaten bu odadaysak bir şey yapma
 
-    loadNotes: async function() {
-        const { data } = await this.state.db.from('items').select('*');
-        data?.forEach(n => {
-            const div = document.createElement('div');
-            div.className = 'note';
-            div.style.left = n.x + 'px';
-            div.style.top = n.y + 'px';
-            div.innerHTML = `<strong>${n.title}</strong><br>${n.content}`;
-            document.getElementById('camera').appendChild(div);
-        });
+        this.state.currentRoomId = newRoomId;
+        document.getElementById('room-name').innerText = newRoomId === 'main' ? 'ANA EVREN' : `KÜTÜPHANE: ${newRoomId}`;
+        
+        await this.loadEntities(newRoomId); // Yeni odanın varlıklarını yükle
+        this.focusCenter(); // Her odaya girişte merkeze odaklan
+        console.log(`Odaya girildi: ${newRoomId}`);
     }
 };
 
-Engine.init();
+// Sadece DOM tamamen yüklendiğinde Engine'i başlat
+document.addEventListener('DOMContentLoaded', () => {
+    Engine.init();
+});
 </script>
 </body>
 </html>
