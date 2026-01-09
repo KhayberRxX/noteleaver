@@ -11,6 +11,7 @@
             --bg: #000000; --ui: rgba(10, 10, 10, 0.9);
             --border: rgba(255, 255, 255, 0.08);
             --lib-color: #00d4ff; --book-color: #ffcc00;
+            --danger: #ff4444;
         }
 
         * { box-sizing: border-box; outline: none; -webkit-font-smoothing: antialiased; }
@@ -49,13 +50,22 @@
             pointer-events: all; box-shadow: 0 20px 40px rgba(0,0,0,0.4);
         }
         .entity:hover { border-color: var(--p); transform: scale(1.05) translateY(-5px); box-shadow: 0 0 30px var(--p-glow); }
-        .entity h3 { margin: 0 0 10px 0; font-weight: 900; font-size: 20px; letter-spacing: -0.5px; }
+        .entity h3 { margin: 0 0 10px 0; font-weight: 900; font-size: 20px; letter-spacing: -0.5px; display: flex; justify-content: space-between; align-items: center; }
         .entity p { margin: 0; color: #aaa; font-size: 14px; line-height: 1.6; }
 
         .type-library { border-left: 5px solid var(--lib-color); cursor: pointer; }
         .type-library h3 { color: var(--lib-color); }
         .type-book { border-left: 5px solid var(--book-color); background: #1a1500; }
         .type-book h3 { color: var(--book-color); }
+
+        /* --- ADMIN & REPORT STYLES --- */
+        .is-reported { border: 2px solid var(--danger) !important; box-shadow: 0 0 20px rgba(255, 68, 68, 0.2); }
+        .report-btn { font-size: 14px; cursor: pointer; opacity: 0.5; transition: 0.2s; }
+        .report-btn:hover { opacity: 1; color: var(--danger); }
+        .admin-delete-btn {
+            width: 100%; margin-top: 15px; padding: 8px; background: var(--danger);
+            color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;
+        }
 
         /* --- CONTEXT MENU --- */
         #ctx {
@@ -92,6 +102,7 @@
 <div id="hud">
     <div class="chip">COORD: <span id="val-xy">0, 0</span></div>
     <div class="chip">ZOOM: <span id="val-z">100%</span></div>
+    <div id="admin-indicator" class="chip" style="display:none; border-color:var(--p)">MODE: <span>ADMIN</span></div>
 </div>
 
 <div id="ctx">
@@ -120,7 +131,8 @@ const Engine = {
     config: {
         SB_URL: "https://ssfgvjudifodfhovhpzx.supabase.co",
         SB_KEY: "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo",
-        CENTER: 100000
+        CENTER: 100000,
+        ADMIN_PASS: "hasan123"
     },
 
     state: {
@@ -129,11 +141,13 @@ const Engine = {
         isDrag: false, lastM: {x:0, y:0},
         targetCoord: {x:0, y:0},
         room: 'main',
-        mType: 'note'
+        mType: 'note',
+        isAdmin: localStorage.getItem('isAdmin') === 'true'
     },
 
     init: async function() {
         this.state.db = supabase.createClient(this.config.SB_URL, this.config.SB_KEY);
+        if(this.state.isAdmin) document.getElementById('admin-indicator').style.display = 'block';
         this.bind();
         this.spawn();
         await this.load();
@@ -170,10 +184,8 @@ const Engine = {
             const delta = e.deltaY > 0 ? -zSpeed : zSpeed;
             const oldS = this.state.scale;
             const newS = Math.min(Math.max(0.1, oldS + delta), 2);
-
             const cx = window.innerWidth / 2;
             const cy = window.innerHeight / 2;
-
             this.state.x = cx - (cx - this.state.x) * (newS / oldS);
             this.state.y = cy - (cy - this.state.y) * (newS / oldS);
             this.state.scale = newS;
@@ -193,6 +205,19 @@ const Engine = {
         };
 
         window.onclick = () => document.getElementById('ctx').style.display = 'none';
+
+        // Admin Kısayolu: "A" tuşu
+        window.onkeydown = (e) => {
+            if(e.key.toLowerCase() === 'a') {
+                const pass = prompt("Yönetici Şifresi:");
+                if(pass === this.config.ADMIN_PASS) {
+                    this.state.isAdmin = true;
+                    localStorage.setItem('isAdmin', 'true');
+                    alert("Yönetici moduna girildi!");
+                    location.reload();
+                }
+            }
+        };
     },
 
     update: function() {
@@ -220,28 +245,40 @@ const Engine = {
         const t = document.getElementById('m-input-t').value;
         const c = document.getElementById('m-input-c').value;
         if(!t || !c) return;
-
         const item = {
             title: t, content: c, x: this.state.targetCoord.x, y: this.state.targetCoord.y,
             type: this.state.mType, room_id: this.state.room
         };
-
         const { error } = await this.state.db.from('items').insert([item]);
         if(error) alert("Hata: " + error.message);
-        else {
-            this.closeModal();
-            location.reload();
-        }
+        else { this.closeModal(); location.reload(); }
+    },
+
+    report: async function(id) {
+        if(!confirm("Raporlamak istiyor musunuz?")) return;
+        await this.state.db.from('items').update({ is_reported: true }).eq('id', id);
+        alert("Bildirildi!");
+    },
+
+    adminDelete: async function(id) {
+        if(!confirm("Kalıcı olarak silinsin mi?")) return;
+        await this.state.db.from('items').delete().eq('id', id);
+        location.reload();
     },
 
     load: async function() {
         const { data } = await this.state.db.from('items').select('*').eq('room_id', this.state.room);
         data?.forEach(item => {
             const el = document.createElement('div');
-            el.className = `entity type-${item.type}`;
+            el.className = `entity type-${item.type} ${item.is_reported ? 'is-reported' : ''}`;
             el.style.left = item.x + 'px'; el.style.top = item.y + 'px';
-            el.innerHTML = `<h3>${item.title}</h3><p>${item.content}</p>`;
             
+            let html = `<h3>${item.title} <span class="report-btn" onclick="event.stopPropagation(); Engine.report(${item.id})">🚩</span></h3><p>${item.content}</p>`;
+            if(this.state.isAdmin) {
+                html += `<button class="admin-delete-btn" onclick="event.stopPropagation(); Engine.adminDelete(${item.id})">SİL (ADMIN)</button>`;
+            }
+            
+            el.innerHTML = html;
             if(item.type === 'library') {
                 el.onclick = () => this.enterRoom(item.title);
             }
@@ -254,19 +291,14 @@ const Engine = {
         fx.style.display = 'flex';
         setTimeout(async () => {
             this.state.room = roomName;
-            this.state.x = 0; this.state.y = 0; // Oda içi reset
+            this.state.x = 0; this.state.y = 0;
             document.getElementById('camera').innerHTML = ''; 
             document.getElementById('room-info').innerText = roomName;
             document.getElementById('back-home').style.display = roomName === 'main' ? 'none' : 'block';
-            
-            // Eğer yeni odaya girildiyse odaya özel spawn
             if(roomName !== 'main') {
                 this.state.x = (window.innerWidth / 2) - 100000;
                 this.state.y = (window.innerHeight / 2) - 100000;
-            } else {
-                this.spawn();
-            }
-
+            } else { this.spawn(); }
             await this.load();
             this.update();
             fx.style.display = 'none';
