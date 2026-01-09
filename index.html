@@ -177,6 +177,22 @@
 
     // Sayfa yüklendiğinde eski notları getir
     window.onload = loadData;
+    // Kodu bu sırayla kontrol et:
+const SUPABASE_URL = 'https://ssfgvjudifodfhovhpzx.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo';
+
+// Eğer yukarıdaki Key hala çalışmıyorsa Supabase API kısmındaki 
+// "anon public" olanla değiştiğinden emin ol.
+
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Kimlik oluşturma kısmını en tepeye taşı
+let userId = localStorage.getItem('userId');
+if (!userId) {
+    userId = "H-" + Math.floor(Math.random() * 9000 + 1000);
+    localStorage.setItem('userId', userId);
+}
+document.getElementById('my-id').innerText = userId;
 </script>
 
 </body>
