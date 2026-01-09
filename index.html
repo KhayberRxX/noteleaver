@@ -7,194 +7,237 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%2300ff88%22/><text y=%22.9em%22 font-size=%2260%22 x=%225%22 font-family=%22sans-serif%22 font-weight=%22bold%22 fill=%22black%22>LN</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <style>
-        :root { --bg: #030303; --card: rgba(20, 20, 20, 0.8); --accent: #00ff88; --text: #ffffff; }
+        :root { --bg: #050505; --card: rgba(25, 25, 25, 0.7); --accent: #00ff88; --glow: rgba(0, 255, 136, 0.3); }
         
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; }
+        * { box-sizing: border-box; outline: none; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: white; font-family: 'Inter', -apple-system, sans-serif; }
 
-        /* Sonsuz Harita Konteynırı */
-        #viewport { width: 100vw; height: 100vh; position: relative; cursor: grab; overflow: hidden; }
+        /* Arka Plan ve Harita */
+        #viewport { width: 100vw; height: 100vh; position: relative; cursor: grab; overflow: hidden; perspective: 1000px; }
         #viewport:active { cursor: grabbing; }
         
         #map { 
-            width: 30000px; height: 30000px; position: absolute; 
-            background-color: #030303;
-            background-image: 
-                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-            background-size: 100px 100px;
+            width: 40000px; height: 40000px; position: absolute; 
+            background: radial-gradient(circle, #111 1px, transparent 1px);
+            background-size: 60px 60px;
             will-change: transform;
+            transition: transform 0.05s linear;
         }
 
-        /* Modern UI Panelleri */
-        .glass { background: var(--card); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; pointer-events: all; }
-        
-        #ui-top { position: fixed; top: 20px; left: 20px; z-index: 1000; display: flex; gap: 12px; pointer-events: none; }
-        .stat-badge { padding: 8px 16px; display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
-
-        /* Not Kartları */
-        .item { 
-            position: absolute; padding: 16px; min-width: 200px; max-width: 300px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5); transition: transform 0.2s;
-            animation: fadeIn 0.5s ease-out;
+        /* Cam Efekti (Glassmorphism) */
+        .glass { 
+            background: var(--card); backdrop-filter: blur(15px); 
+            border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
         }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        .item h4 { margin: 0 0 8px 0; color: var(--accent); font-size: 18px; letter-spacing: -0.5px; }
-        .item p { margin: 0; line-height: 1.5; color: #ccc; font-size: 14px; }
-        .item.library { border-left: 5px solid var(--accent); width: 320px; }
+
+        /* Üst Menü */
+        #ui-layer { position: fixed; top: 25px; left: 25px; z-index: 1000; display: flex; gap: 15px; pointer-events: none; }
+        .chip { 
+            padding: 10px 20px; font-weight: 700; font-size: 13px; letter-spacing: 0.5px;
+            display: flex; align-items: center; gap: 10px; pointer-events: all;
+            animation: slideIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Not Kartları ve Animasyonlar */
+        .note { 
+            position: absolute; padding: 20px; min-width: 220px; max-width: 320px; 
+            pointer-events: all; border-left: 3px solid var(--accent);
+            animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .note h4 { margin: 0 0 10px 0; font-size: 18px; color: var(--accent); text-shadow: 0 0 10px var(--glow); }
+        .note p { margin: 0; font-size: 14px; color: #bbb; line-height: 1.6; }
+        .note img { width: 100%; border-radius: 10px; margin-top: 10px; border: 1px solid #333; }
 
         /* Sağ Tık Menü */
-        #ctx-menu { 
-            position: fixed; display: none; flex-direction: column; width: 180px; padding: 6px; z-index: 5000;
-            box-shadow: 0 15px 45px rgba(0,0,0,0.7);
+        #menu { 
+            position: fixed; display: none; flex-direction: column; width: 200px; 
+            padding: 8px; z-index: 5000; gap: 5px;
         }
-        #ctx-menu button { 
-            background: none; border: none; color: white; padding: 12px; text-align: left; 
-            cursor: pointer; border-radius: 8px; font-weight: 500; transition: 0.2s;
+        #menu button { 
+            background: transparent; border: none; color: white; padding: 12px 15px; 
+            text-align: left; cursor: pointer; border-radius: 12px; font-weight: 600; 
+            transition: all 0.2s ease;
         }
-        #ctx-menu button:hover { background: var(--accent); color: black; }
+        #menu button:hover { background: var(--accent); color: black; transform: scale(1.05); }
 
-        /* Formlar */
+        /* Giriş Paneli */
         .modal { 
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            padding: 32px; width: 400px; display: none; z-index: 10000;
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.9); 
+            padding: 40px; width: 450px; display: none; z-index: 10000; opacity: 0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
+        .modal.active { transform: translate(-50%, -50%) scale(1); opacity: 1; display: block; }
+        
         input, textarea { 
-            width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #333; 
-            color: white; padding: 14px; margin: 10px 0; border-radius: 10px; font-size: 15px;
+            width: 100%; background: rgba(0,0,0,0.5); border: 1px solid #444; 
+            color: white; padding: 15px; margin: 12px 0; border-radius: 12px; 
+            font-size: 16px; transition: border 0.3s;
         }
-        .btn-send { 
-            width: 100%; padding: 14px; background: var(--accent); border: none; 
-            border-radius: 10px; font-weight: 800; cursor: pointer; margin-top: 10px;
+        input:focus { border-color: var(--accent); box-shadow: 0 0 15px var(--glow); }
+        
+        .primary-btn { 
+            width: 100%; padding: 16px; background: var(--accent); border: none; 
+            border-radius: 12px; font-weight: 800; cursor: pointer; color: black;
+            font-size: 15px; box-shadow: 0 0 20px var(--glow); transition: 0.3s;
         }
+        .primary-btn:hover { transform: translateY(-3px); box-shadow: 0 5px 25px var(--glow); }
 
-        #coords-display { position: fixed; bottom: 20px; left: 20px; font-family: monospace; font-size: 12px; color: #666; }
+        /* Koordinat ve Admin */
+        #hud { position: fixed; bottom: 25px; left: 25px; font-family: 'Monaco', monospace; font-size: 11px; color: #444; }
+        .admin-del { color: #ff4444; font-size: 10px; cursor: pointer; margin-top: 10px; display: none; }
+
+        /* Animasyon Tanımları */
+        @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes slideIn { 0% { transform: translateX(-50px); opacity: 0; } 100% { transform: translateX(0); opacity: 1; } }
     </style>
 </head>
 <body>
 
-<div id="ui-top">
-    <div class="stat-badge glass">🆔 <span id="user-id">...</span></div>
-    <div class="stat-badge glass">📚 <span id="lib-count">3</span></div>
-    <div class="stat-badge glass" style="cursor:pointer" onclick="adminLogin()">⚙️</div>
+<div id="ui-layer">
+    <div class="chip glass">🆔 <span id="uid" style="color:var(--accent)">...</span></div>
+    <div class="chip glass">📚 <span id="lib-val">3</span></div>
+    <div class="chip glass" style="cursor:pointer" onclick="checkAuth()">⚙️</div>
 </div>
 
 <div id="viewport">
     <div id="map"></div>
 </div>
 
-<div id="coords-display">LOC: 0, 0</div>
+<div id="hud">SYSTEM_READY // LOC: <span id="pos">0,0</span></div>
 
-<div id="ctx-menu" class="glass">
-    <button onclick="openForm('note')">📝 Not Bırak</button>
-    <button onclick="openForm('draw')">🎨 Çizim Yap</button>
-    <button onclick="createLib()">📚 Kütüphane Kur</button>
+<div id="menu" class="glass">
+    <button onclick="popModal('note')">📝 Yeni Not</button>
+    <button onclick="popModal('draw')">🎨 Çizim Alanı</button>
+    <button onclick="popModal('library')">📚 Kütüphane</button>
 </div>
 
-<div id="modal" class="modal glass">
-    <h2 id="modal-title" style="margin: 0 0 20px 0; font-size: 24px;">Not Bırak</h2>
-    <input type="text" id="inp-title" placeholder="Başlık...">
-    <div id="box-text"><textarea id="inp-content" rows="5" placeholder="Bir şeyler yaz..."></textarea></div>
-    <div id="box-draw" style="display:none">
-        <canvas id="paint-canvas" width="340" height="200" style="background:#000; border-radius:8px; cursor:crosshair"></canvas>
+<div id="modal-box" class="modal glass">
+    <h1 id="m-title" style="margin: 0 0 10px 0; font-size: 28px; font-weight: 900;">Not Yaz</h1>
+    <input type="text" id="m-head" placeholder="Başlık girin...">
+    <div id="m-text-area"><textarea id="m-body" rows="6" placeholder="Dünyaya ne söylemek istersin?"></textarea></div>
+    <div id="m-draw-area" style="display:none; text-align:center;">
+        <canvas id="paint" width="370" height="250" style="background:#000; border-radius:15px; cursor:crosshair; border:1px solid #333;"></canvas>
+        <p style="font-size:10px; color:#666;">Mouse ile çizmeye başla</p>
     </div>
-    <button class="btn-send" onclick="submitData()">DÜNYAYA BIRAK</button>
-    <button onclick="closeModal()" style="background:none; border:none; color:#666; width:100%; margin-top:10px; cursor:pointer">Vazgeç</button>
+    <button class="primary-btn" onclick="sendToSpace()">YAYINLA</button>
+    <button onclick="closeModal()" style="background:none; border:none; color:#555; width:100%; margin-top:15px; cursor:pointer; font-weight:bold;">KAPAT</button>
 </div>
 
 <script>
-    // --- BAĞLANTI ---
-    const S_URL = "https://ssfgvjudifodfhovhpzx.supabase.co";
-    const S_KEY = "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo";
-    const _supabase = supabase.createClient(S_URL, S_KEY);
+    const DB_URL = "https://ssfgvjudifodfhovhpzx.supabase.co";
+    const DB_KEY = "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo";
+    const _db = supabase.createClient(DB_URL, DB_KEY);
 
-    let isDown = false, startX, startY, scrollX, scrollY;
-    let mapX = -15000, mapY = -15000; // Başlangıç konumu (Orta)
-    let curX, curY, curType;
-    let userId = localStorage.getItem('ln_user') || 'H-' + Math.floor(Math.random()*9999);
-    localStorage.setItem('ln_user', userId);
-    document.getElementById('user-id').innerText = userId;
+    let isDragging = false, startX, startY, mapX = -20000, mapY = -20000;
+    let cx, cy, activeMode, isAdmin = false;
+    let myId = localStorage.getItem('ln_id') || 'H-' + Math.floor(Math.random()*9999);
+    localStorage.setItem('ln_id', myId);
+    document.getElementById('uid').innerText = myId;
 
-    const viewport = document.getElementById('viewport');
     const map = document.getElementById('map');
+    const viewport = document.getElementById('viewport');
 
-    // Haritayı merkeze yerleştir
+    // Harita Başlangıç
     map.style.transform = `translate(${mapX}px, ${mapY}px)`;
 
-    // --- SÜRÜKLEME ---
+    // Harita Hareket (Yumuşak)
     viewport.addEventListener('mousedown', e => {
         if(e.target !== map) return;
-        isDown = true;
+        isDragging = true;
         startX = e.clientX - mapX;
         startY = e.clientY - mapY;
     });
 
     window.addEventListener('mousemove', e => {
-        // Koordinat Güncelleme
         const rect = map.getBoundingClientRect();
-        const x = Math.round(e.clientX - rect.left);
-        const y = Math.round(e.clientY - rect.top);
-        document.getElementById('coords-display').innerText = `X: ${x} | Y: ${y}`;
+        const mouseX = Math.round(e.clientX - rect.left);
+        const mouseY = Math.round(e.clientY - rect.top);
+        document.getElementById('pos').innerText = `${mouseX}, ${mouseY}`;
 
-        if(!isDown) return;
+        if(!isDragging) return;
         mapX = e.clientX - startX;
         mapY = e.clientY - startY;
         map.style.transform = `translate(${mapX}px, ${mapY}px)`;
     });
 
-    window.addEventListener('mouseup', () => isDown = false);
+    window.addEventListener('mouseup', () => isDragging = false);
 
-    // --- MENÜ & MODAL ---
+    // Sağ Tık
     map.addEventListener('contextmenu', e => {
         e.preventDefault();
         const rect = map.getBoundingClientRect();
-        curX = e.clientX - rect.left;
-        curY = e.clientY - rect.top;
-        const menu = document.getElementById('ctx-menu');
+        cx = e.clientX - rect.left;
+        cy = e.clientY - rect.top;
+        const menu = document.getElementById('menu');
         menu.style.display = 'flex';
         menu.style.left = e.clientX + 'px';
         menu.style.top = e.clientY + 'px';
     });
+    window.addEventListener('click', () => document.getElementById('menu').style.display = 'none');
 
-    window.addEventListener('click', () => document.getElementById('ctx-menu').style.display = 'none');
+    // Çizim
+    const canvas = document.getElementById('paint');
+    const ctx = canvas.getContext('2d');
+    let isPainting = false;
+    canvas.addEventListener('mousedown', () => isPainting = true);
+    window.addEventListener('mouseup', () => { isPainting = false; ctx.beginPath(); });
+    canvas.addEventListener('mousemove', (e) => {
+        if(!isPainting) return;
+        ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.strokeStyle = '#00ff88';
+        const rect = canvas.getBoundingClientRect();
+        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.stroke();
+    });
 
-    function openForm(type) {
-        curType = type;
-        document.getElementById('modal').style.display = 'block';
-        document.getElementById('box-draw').style.display = (type === 'draw') ? 'block' : 'none';
-        document.getElementById('box-text').style.display = (type === 'draw') ? 'none' : 'block';
+    // Fonksiyonlar
+    function popModal(mode) {
+        activeMode = mode;
+        const m = document.getElementById('modal-box');
+        m.classList.add('active');
+        document.getElementById('m-draw-area').style.display = (mode === 'draw') ? 'block' : 'none';
+        document.getElementById('m-text-area').style.display = (mode === 'draw') ? 'none' : 'block';
     }
+    function closeModal() { document.getElementById('modal-box').classList.remove('active'); ctx.clearRect(0,0,canvas.width,canvas.height); }
 
-    function closeModal() { document.getElementById('modal').style.display = 'none'; }
+    async function sendToSpace() {
+        const title = document.getElementById('m-head').value;
+        let content = (activeMode === 'draw') ? canvas.toDataURL() : document.getElementById('m-body').value;
+        if(!title || !content) return;
 
-    // --- VERİ GÖNDERME ---
-    async function submitData() {
-        const title = document.getElementById('inp-title').value;
-        const content = document.getElementById('inp-content').value;
-        if(!title || !content) return alert("Alanları doldur!");
-
-        const { error } = await _supabase.from('items').insert([
-            { title, content, x: curX, y: curY, type: curType, user_id: userId }
-        ]);
-
+        const { error } = await _db.from('items').insert([{ title, content, x: cx, y: cy, type: activeMode, user_id: myId }]);
         if(!error) location.reload();
-        else alert("Hata oluştu: " + error.message);
     }
 
-    // --- VERİ ÇEKME ---
-    async function loadAll() {
-        const { data } = await _supabase.from('items').select('*');
+    async function load() {
+        const { data } = await _db.from('items').select('*');
         if(data) data.forEach(item => {
             const div = document.createElement('div');
-            div.className = `item glass ${item.type}`;
+            div.className = `note glass ${item.type}`;
             div.style.left = item.x + 'px';
             div.style.top = item.y + 'px';
-            div.innerHTML = `<h4>${item.title}</h4><p>${item.content}</p>`;
+            let body = item.type === 'draw' ? `<img src="${item.content}">` : `<p>${item.content}</p>`;
+            div.innerHTML = `<h4>${item.title}</h4>${body}<div class="admin-del" onclick="delItem(${item.id})">SİL (ADMIN)</div>`;
             map.appendChild(div);
         });
     }
 
-    window.onload = loadAll;
+    function checkAuth() {
+        const p = prompt("Yönetici Anahtarı:");
+        if(p === "Hasan0245") {
+            isAdmin = true;
+            document.querySelectorAll('.admin-del').forEach(d => d.style.display = 'block');
+            alert("Sistem yetkisi sağlandı.");
+        }
+    }
+
+    async function delItem(id) {
+        if(!isAdmin) return;
+        await _db.from('items').delete().eq('id', id);
+        location.reload();
+    }
+
+    window.onload = load;
 </script>
 </body>
 </html>
