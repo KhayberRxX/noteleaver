@@ -3,494 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leave a Note | Devasa Evren</title>
-    
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <title>Leave a Note | Pro</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-
     <style>
-        /* MODERN CSS ARCHITECTURE 
-        */
-        :root {
-            --bg: #030303;
-            --accent: #00ff88;
-            --accent-glow: rgba(0, 255, 136, 0.4);
-            --glass: rgba(15, 15, 15, 0.85);
-            --border: rgba(255, 255, 255, 0.1);
-            --text-main: #ffffff;
-            --text-dim: #888888;
-            --danger: #ff4444;
-        }
+        :root { --p: #00ff88; --bg: #050505; --s: #111; --danger: #ff3e3e; }
+        * { box-sizing: border-box; outline: none; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: #fff; font-family: 'Segoe UI', sans-serif; }
 
-        * { 
-            box-sizing: border-box; 
-            outline: none; 
-            -webkit-tap-highlight-color: transparent;
-        }
+        /* --- GAME ENGINE MAP --- */
+        #world { width: 100vw; height: 100vh; position: relative; overflow: hidden; cursor: grab; background: #000; }
+        #canvas-wrap { position: absolute; width: 60000px; height: 60000px; transform-origin: 0 0; will-change: transform; background-image: radial-gradient(#222 1px, transparent 1px); background-size: 50px 50px; }
 
-        body, html {
-            margin: 0; padding: 0;
-            width: 100vw; height: 100vh;
-            background: var(--bg);
-            color: var(--text-main);
-            font-family: 'Inter', sans-serif;
-            overflow: hidden;
-        }
+        /* --- SIDEBAR NAV --- */
+        #sidebar { position: fixed; left: 20px; top: 50%; transform: translateY(-50%); z-index: 1000; display: flex; flex-direction: column; gap: 15px; }
+        .nav-btn { width: 60px; height: 60px; background: var(--s); border: 1px solid #333; border-radius: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+        .nav-btn:hover { border-color: var(--p); transform: scale(1.1); color: var(--p); }
+        .nav-btn.active { background: var(--p); color: #000; }
 
-        /* --- HARİTA VE KAMERA SİSTEMİ --- */
-        #viewport {
-            width: 100vw; height: 100vh;
-            position: relative;
-            cursor: grab;
-            overflow: hidden;
-            background: radial-gradient(circle at center, #111 0%, #030303 100%);
-        }
+        /* --- BAN SCREEN --- */
+        #ban-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 9999; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; backdrop-filter: blur(10px); }
+        #ban-overlay h1 { color: var(--danger); font-size: 64px; margin: 0; }
 
-        #viewport:active { cursor: grabbing; }
+        /* --- MODERN WINDOWS --- */
+        .window { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; background: var(--s); border: 1px solid #333; border-radius: 25px; padding: 30px; z-index: 2000; display: none; box-shadow: 0 30px 60px rgba(0,0,0,0.8); }
+        .window.active { display: block; animation: flowIn 0.4s ease; }
+        @keyframes flowIn { from { opacity: 0; transform: translate(-50%, -45%); } to { opacity: 1; transform: translate(-50%, -50%); } }
 
-        #map {
-            width: 50000px; height: 50000px;
-            position: absolute;
-            background-image: 
-                linear-gradient(var(--border) 1px, transparent 1px),
-                linear-gradient(90deg, var(--border) 1px, transparent 1px);
-            background-size: 100px 100px;
-            will-change: transform;
-            transition: transform 0.1s cubic-bezier(0.2, 0, 0.2, 1);
-        }
+        /* --- ELEMENTS --- */
+        input, textarea { width: 100%; background: #000; border: 1px solid #222; color: #fff; padding: 15px; border-radius: 12px; margin-top: 10px; font-size: 16px; }
+        .submit-btn { width: 100%; padding: 15px; background: var(--p); border: none; border-radius: 12px; font-weight: bold; margin-top: 20px; cursor: pointer; color: #000; }
+        
+        .note-obj { position: absolute; padding: 20px; background: rgba(20,20,20,0.9); border: 1px solid #333; border-radius: 15px; backdrop-filter: blur(5px); min-width: 200px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .note-obj:hover { border-color: var(--p); z-index: 500; }
+        .note-obj h3 { margin: 0 0 10px 0; color: var(--p); border-bottom: 1px solid #222; }
 
-        /* --- ÜST ARAYÜZ (HUD) --- */
-        #hud-top {
-            position: fixed; top: 30px; left: 30px;
-            z-index: 1000; display: flex; gap: 15px;
-            pointer-events: none;
-        }
-
-        .hud-card {
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            padding: 12px 24px;
-            border-radius: 50px;
-            pointer-events: all;
-            display: flex; align-items: center; gap: 12px;
-            font-weight: 600; font-size: 14px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            animation: slideDown 0.8s ease-out;
-        }
-
-        .hud-card span { color: var(--accent); }
-
-        /* --- NOTLAR VE ÇİZİMLER --- */
-        .note-card {
-            position: absolute;
-            padding: 20px;
-            width: 280px;
-            background: var(--glass);
-            backdrop-filter: blur(15px);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            pointer-events: all;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            animation: popIn 0.5s ease-out forwards;
-        }
-
-        .note-card:hover {
-            transform: translateY(-10px) scale(1.02);
-            border-color: var(--accent);
-            box-shadow: 0 0 30px var(--accent-glow);
-        }
-
-        .note-card h4 {
-            margin: 0 0 10px 0;
-            font-size: 18px; font-weight: 800;
-            color: var(--accent);
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 8px;
-        }
-
-        .note-card p {
-            font-size: 14px; line-height: 1.6;
-            color: #ddd; margin: 0;
-        }
-
-        .note-card img {
-            width: 100%; border-radius: 12px;
-            margin-top: 10px; border: 1px solid #222;
-        }
-
-        .card-footer {
-            margin-top: 15px;
-            display: flex; justify-content: space-between;
-            font-size: 10px; color: var(--text-dim);
-        }
-
-        .report-btn {
-            background: none; border: none; color: var(--danger);
-            cursor: pointer; font-weight: bold; opacity: 0.5;
-        }
-        .report-btn:hover { opacity: 1; }
-
-        /* --- KONTEKST MENÜ (SAĞ TIK) --- */
-        #context-menu {
-            position: fixed; display: none;
-            width: 220px; background: var(--glass);
-            backdrop-filter: blur(25px);
-            border: 1px solid var(--border);
-            border-radius: 15px; z-index: 5000;
-            padding: 8px; flex-direction: column; gap: 4px;
-        }
-
-        .menu-item {
-            background: none; border: none; color: white;
-            padding: 14px 18px; text-align: left;
-            cursor: pointer; border-radius: 10px;
-            font-weight: 600; display: flex; align-items: center; gap: 12px;
-            transition: 0.2s;
-        }
-
-        .menu-item:hover {
-            background: var(--accent);
-            color: black;
-            transform: translateX(5px);
-        }
-
-        /* --- MODAL VE FORM SİSTEMİ --- */
-        .overlay {
-            position: fixed; top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            background: rgba(0,0,0,0.8);
-            z-index: 9000; display: none;
-            backdrop-filter: blur(5px);
-        }
-
-        .modal {
-            position: fixed; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            width: 450px; background: #0a0a0a;
-            border: 1px solid var(--accent);
-            border-radius: 25px; padding: 40px;
-            z-index: 10000; display: none;
-            box-shadow: 0 0 100px rgba(0, 255, 136, 0.15);
-        }
-
-        .modal h2 { margin-top: 0; font-weight: 800; font-size: 28px; }
-
-        input, textarea {
-            width: 100%; background: #111;
-            border: 1px solid #222; color: white;
-            padding: 16px; border-radius: 12px;
-            margin-bottom: 15px; font-size: 16px;
-            transition: 0.3s;
-        }
-
-        input:focus, textarea:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 15px var(--accent-glow);
-        }
-
-        .primary-btn {
-            width: 100%; padding: 18px;
-            background: var(--accent); border: none;
-            border-radius: 12px; font-weight: 800;
-            color: black; cursor: pointer;
-            font-size: 16px; transition: 0.3s;
-        }
-
-        .primary-btn:hover {
-            transform: scale(1.02);
-            box-shadow: 0 0 25px var(--accent-glow);
-        }
-
-        /* --- ÇİZİM PANELİ --- */
-        #drawing-board {
-            background: #000; border: 1px solid #222;
-            border-radius: 15px; margin-bottom: 15px;
-            cursor: crosshair; touch-action: none;
-        }
-
-        /* --- ADMİN PANELİ --- */
-        #admin-panel {
-            position: fixed; right: 30px; top: 30px;
-            width: 300px; background: var(--glass);
-            border: 1px solid var(--danger);
-            border-radius: 20px; padding: 20px;
-            z-index: 1000; display: none;
-        }
-
-        .admin-del-btn {
-            background: var(--danger); color: white;
-            border: none; padding: 5px 10px; border-radius: 5px;
-            cursor: pointer; font-size: 10px; margin-top: 10px;
-            display: none; width: 100%;
-        }
-
-        /* --- ANIMASYONLAR --- */
-        @keyframes popIn {
-            0% { transform: scale(0.8); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        @keyframes slideDown {
-            0% { transform: translateY(-100px); opacity: 0; }
-            100% { transform: translateY(0); opacity: 1; }
-        }
-
-        #coords-hud {
-            position: fixed; bottom: 30px; left: 30px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px; color: var(--text-dim);
-            pointer-events: none;
-        }
-
+        #hud { position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.5); padding: 10px 20px; border-radius: 30px; font-family: monospace; font-size: 12px; color: #666; pointer-events: none; }
     </style>
 </head>
 <body>
 
-    <div id="hud-top">
-        <div class="hud-card">👤 ID: <span id="display-id">...</span></div>
-        <div class="hud-card">📦 Kalan Hak: <span id="display-credits">3</span></div>
-        <div class="hud-card" style="cursor:pointer; pointer-events:all" onclick="toggleAdminAuth()">⚙️</div>
+<div id="ban-overlay">
+    <h1>ERIŞIM ENGELLENDI</h1>
+    <p id="ban-text">Kural ihlali nedeniyle uzaklaştırıldınız.</p>
+    <div id="ban-timer" style="font-size: 24px; color: var(--p)">00:00</div>
+</div>
+
+<div id="sidebar">
+    <div class="nav-btn" onclick="openWin('note-win')" title="Not Bırak">📝</div>
+    <div class="nav-btn" onclick="openWin('draw-win')" title="Çizim Yap">🎨</div>
+    <div class="nav-btn" onclick="openWin('lib-win')" title="Kütüphane">📚</div>
+    <div class="nav-btn" onclick="openWin('admin-win')" title="Yönetim">⚙️</div>
+</div>
+
+<div id="world">
+    <div id="canvas-wrap"></div>
+</div>
+
+<div id="hud">
+    COORD: <span id="cx">0</span>, <span id="cy">0</span> | ZOOM: <span id="cz">1.0</span>
+</div>
+
+<div id="note-win" class="window">
+    <h2>📝 Yeni Not</h2>
+    <input type="text" id="n-title" placeholder="Başlık...">
+    <textarea id="n-body" rows="4" placeholder="Mesajınız..."></textarea>
+    <button class="submit-btn" onclick="save('note')">DÜNYAYA EKLE</button>
+    <button onclick="closeWins()" style="width:100%; background:none; border:none; color:#555; margin-top:10px; cursor:pointer">Kapat</button>
+</div>
+
+<div id="admin-win" class="window">
+    <h2>⚙️ Yönetici Girişi</h2>
+    <input type="password" id="admin-pass" placeholder="Şifre...">
+    <button class="submit-btn" onclick="adminAuth()">GIRIŞ YAP</button>
+    <div id="admin-controls" style="display:none; margin-top:20px">
+        <h3 style="color:var(--danger)">🚩 Raporlar</h3>
+        <div id="report-list" style="max-height:200px; overflow-y:auto"></div>
     </div>
+</div>
 
-    <div id="admin-panel">
-        <h3 style="margin:0; color:var(--danger)">🔴 MODERATÖR PANELİ</h3>
-        <p style="font-size:11px; color:#888">Raporlanan içerikleri aşağıdan yönetin.</p>
-        <div id="report-list" style="max-height: 200px; overflow-y: auto;"></div>
-    </div>
+<script>
+    const S_URL = "https://ssfgvjudifodfhovhpzx.supabase.co";
+    const S_KEY = "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo";
+    const _db = supabase.createClient(S_URL, S_KEY);
 
-    <div id="viewport">
-        <div id="map"></div>
-    </div>
+    let scale = 1, offsetX = -30000, offsetY = -30000;
+    let isDragging = false, lastX, lastY, isAdmin = false;
+    const wrap = document.getElementById('canvas-wrap');
+    const world = document.getElementById('world');
 
-    <div id="coords-hud">LOC // X: 0 | Y: 0</div>
+    // --- ENGINE: MOVEMENT & ZOOM ---
+    world.addEventListener('wheel', e => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        scale = Math.min(Math.max(0.1, scale * delta), 3);
+        updateTransform();
+    }, {passive: false});
 
-    <div id="context-menu">
-        <button class="menu-item" onclick="openModal('note')">📝 Not Bırak</button>
-        <button class="menu-item" onclick="openModal('draw')">🎨 Çizim Yap</button>
-        <button class="menu-item" onclick="openModal('library')">📚 Kütüphane Kur</button>
-    </div>
-
-    <div class="overlay" id="modal-overlay" onclick="closeModal()"></div>
-    <div class="modal" id="main-modal">
-        <h2 id="modal-title">Yeni Not</h2>
-        <input type="text" id="input-title" placeholder="Başlık (Örn: Hasan'ın Köşesi)">
+    world.addEventListener('mousedown', e => { if(e.target === world || e.target === wrap) { isDragging = true; lastX = e.clientX; lastY = e.clientY; }});
+    window.addEventListener('mousemove', e => {
+        const rect = wrap.getBoundingClientRect();
+        document.getElementById('cx').innerText = Math.round((e.clientX - rect.left) / scale);
+        document.getElementById('cy').innerText = Math.round((e.clientY - rect.top) / scale);
         
-        <div id="text-input-group">
-            <textarea id="input-content" rows="5" placeholder="Dünyaya ne söylemek istersin?"></textarea>
-        </div>
+        if(!isDragging) return;
+        offsetX += (e.clientX - lastX);
+        offsetY += (e.clientY - lastY);
+        lastX = e.clientX; lastY = e.clientY;
+        updateTransform();
+    });
+    window.addEventListener('mouseup', () => isDragging = false);
 
-        <div id="draw-input-group" style="display:none">
-            <canvas id="drawing-board" width="370" height="220"></canvas>
-            <button onclick="clearCanvas()" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:12px">Temizle</button>
-        </div>
+    function updateTransform() {
+        wrap.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+        document.getElementById('cz').innerText = scale.toFixed(1);
+    }
 
-        <button class="primary-btn" onclick="saveToCloud()">YAYINLA</button>
-    </div>
+    // --- UI LOGIC ---
+    function openWin(id) { closeWins(); document.getElementById(id).classList.add('active'); }
+    function closeWins() { document.querySelectorAll('.window').forEach(w => w.classList.remove('active')); }
 
-    <script>
-        /*
-           MEGA ENGINE JAVASCRIPT
-        */
+    // --- DATA ---
+    async function save(type) {
+        const title = document.getElementById('n-title').value;
+        const content = document.getElementById('n-body').value;
+        const rect = wrap.getBoundingClientRect();
+        // Merkeze not bırakma mantığı
+        const x = (window.innerWidth/2 - offsetX) / scale;
+        const y = (window.innerHeight/2 - offsetY) / scale;
 
-        // --- KONFİGÜRASYON ---
-        const SB_URL = "https://ssfgvjudifodfhovhpzx.supabase.co";
-        const SB_KEY = "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo";
-        const _client = supabase.createClient(SB_URL, SB_KEY);
+        const { error } = await _db.from('items').insert([{ title, content, x, y, type, user_id: 'HasanUser' }]);
+        if(!error) location.reload();
+    }
 
-        let isDragging = false, startX, startY, mapX = -25000, mapY = -25000;
-        let activeX, activeY, activeType, isAdmin = false;
-        
-        let myUserId = localStorage.getItem('ln_id') || 'USER-' + Math.floor(Math.random()*100000);
-        localStorage.setItem('ln_id', myUserId);
-        document.getElementById('display-id').innerText = myUserId;
-
-        const map = document.getElementById('map');
-        const viewport = document.getElementById('viewport');
-
-        // Haritayı merkeze çek
-        map.style.transform = `translate(${mapX}px, ${mapY}px)`;
-
-        // --- HARİTA HAREKETLERİ ---
-        viewport.addEventListener('mousedown', (e) => {
-            if(e.target !== map) return;
-            isDragging = true;
-            startX = e.clientX - mapX;
-            startY = e.clientY - mapY;
-        });
-
-        window.addEventListener('mousemove', (e) => {
-            const rect = map.getBoundingClientRect();
-            const mouseX = Math.round(e.clientX - rect.left);
-            const mouseY = Math.round(e.clientY - rect.top);
-            document.getElementById('coords-hud').innerText = `LOC // X: ${mouseX} | Y: ${mouseY}`;
-
-            if(!isDragging) return;
-            mapX = e.clientX - startX;
-            mapY = e.clientY - startY;
-            map.style.transform = `translate(${mapX}px, ${mapY}px)`;
-        });
-
-        window.addEventListener('mouseup', () => isDragging = false);
-
-        // --- MENÜ KONTROLÜ ---
-        map.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            const rect = map.getBoundingClientRect();
-            activeX = e.clientX - rect.left;
-            activeY = e.clientY - rect.top;
-            
-            const menu = document.getElementById('context-menu');
-            menu.style.display = 'flex';
-            menu.style.left = e.clientX + 'px';
-            menu.style.top = e.clientY + 'px';
-        });
-
-        window.addEventListener('click', () => {
-            document.getElementById('context-menu').style.display = 'none';
-        });
-
-        // --- ÇİZİM SİSTEMİ ---
-        const canvas = document.getElementById('drawing-board');
-        const ctx = canvas.getContext('2d');
-        let painting = false;
-
-        canvas.addEventListener('mousedown', () => painting = true);
-        window.addEventListener('mouseup', () => { painting = false; ctx.beginPath(); });
-        canvas.addEventListener('mousemove', (e) => {
-            if(!painting) return;
-            ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.strokeStyle = '#00ff88';
-            const rect = canvas.getBoundingClientRect();
-            ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-            ctx.stroke();
-        });
-
-        function clearCanvas() { ctx.clearRect(0,0,canvas.width,canvas.height); }
-
-        // --- MODAL YÖNETİMİ ---
-        function openModal(type) {
-            activeType = type;
-            document.getElementById('modal-overlay').style.display = 'block';
-            document.getElementById('main-modal').style.display = 'block';
-            document.getElementById('modal-title').innerText = type === 'note' ? 'Yeni Not' : type === 'draw' ? 'Çizim Alanı' : 'Kütüphane Projesi';
-            
-            document.getElementById('draw-input-group').style.display = (type === 'draw') ? 'block' : 'none';
-            document.getElementById('text-input-group').style.display = (type === 'draw') ? 'none' : 'block';
-        }
-
-        function closeModal() {
-            document.getElementById('modal-overlay').style.display = 'none';
-            document.getElementById('main-modal').style.display = 'none';
-            clearCanvas();
-        }
-
-        // --- BULUT VERİ İŞLEMLERİ ---
-        async function saveToCloud() {
-            // Ban Kontrolü (Hızlı Check)
-            const { data: userCheck } = await _client.from('site_users').select('banned_until').eq('user_id', myUserId).single();
-            if(userCheck && userCheck.banned_until && new Date(userCheck.banned_until) > new Date()) {
-                alert("Sistem: 5 Dakika boyunca yasaklısınız. Sebep: Moderasyon Kararı.");
-                return;
-            }
-
-            const title = document.getElementById('input-title').value;
-            let content = (activeType === 'draw') ? canvas.toDataURL() : document.getElementById('input-content').value;
-
-            if(!title || !content) {
-                alert("Lütfen tüm alanları doldurun.");
-                return;
-            }
-
-            const { error } = await _client.from('items').insert([{
-                type: activeType, title: title, content: content, x: activeX, y: activeY, user_id: myUserId
-            }]);
-
-            if(!error) {
-                closeModal();
-                fetchNotes();
-            } else {
-                alert("Hata: " + error.message);
-            }
-        }
-
-        async function fetchNotes() {
-            const { data, error } = await _client.from('items').select('*');
-            if(data) {
-                map.innerHTML = ""; // Temizle ve tekrar çiz
-                data.forEach(renderNote);
-            }
-        }
-
-        function renderNote(data) {
+    async function load() {
+        const { data } = await _db.from('items').select('*');
+        data?.forEach(item => {
             const div = document.createElement('div');
-            div.className = `note-card ${data.type}`;
-            div.style.left = data.x + 'px';
-            div.style.top = data.y + 'px';
+            div.className = 'note-obj';
+            div.style.left = item.x + 'px';
+            div.style.top = item.y + 'px';
+            div.innerHTML = `<h3>${item.title}</h3><p>${item.content}</p>
+                <button onclick="report(${item.id})" style="font-size:10px; background:none; border:1px solid #444; color:#666; cursor:pointer">Raporla</button>
+                <button class="adm-btn" onclick="adminDel(${item.id}, '${item.user_id}')" style="display:none; color:red">SİL & BAN</button>`;
+            wrap.appendChild(div);
+        });
+        updateTransform();
+        checkBan();
+    }
 
-            let bodyHtml = data.type === 'draw' ? `<img src="${data.content}">` : `<p>${data.content}</p>`;
-
-            div.innerHTML = `
-                <h4>${data.title}</h4>
-                ${bodyHtml}
-                <div class="card-footer">
-                    <span>${data.user_id.substring(0,8)}</span>
-                    <button class="report-btn" onclick="reportNote(${data.id})">REPORT</button>
-                </div>
-                <button class="admin-del-btn" id="del-${data.id}" onclick="adminAction(${data.id}, '${data.user_id}')">SİL & 5DK BAN</button>
-            `;
-            
-            if(isAdmin) div.querySelector('.admin-del-btn').style.display = 'block';
-            map.appendChild(div);
+    async function checkBan() {
+        const { data } = await _db.from('site_users').select('*').eq('user_id', 'HasanUser').single();
+        if(data && new Date(data.banned_until) > new Date()) {
+            document.getElementById('ban-overlay').style.display = 'flex';
+            // Sayaç eklenebilir
         }
+    }
 
-        // --- MODERASYON SİSTEMİ ---
-        function toggleAdminAuth() {
-            const pass = prompt("Güvenlik Anahtarı:");
-            if(pass === "Hasan0245") {
-                isAdmin = true;
-                document.getElementById('admin-panel').style.display = 'block';
-                document.querySelectorAll('.admin-del-btn').forEach(b => b.style.display = 'block');
-                fetchReports();
-            }
+    function adminAuth() {
+        if(document.getElementById('admin-pass').value === "Hasan0245") {
+            isAdmin = true;
+            document.getElementById('admin-controls').style.display = 'block';
+            document.querySelectorAll('.adm-btn').forEach(b => b.style.display = 'block');
+            alert("Yetki onaylandı.");
         }
+    }
 
-        async function reportNote(id) {
-            await _client.from('items').update({ is_reported: true }).eq('id', id);
-            alert("İçerik raporlandı ve moderatörlere iletildi.");
-        }
-
-        async function fetchReports() {
-            const { data } = await _client.from('items').select('*').eq('is_reported', true);
-            const list = document.getElementById('report-list');
-            list.innerHTML = "";
-            if(data) {
-                data.forEach(r => {
-                    list.innerHTML += `<div style="padding:10px; border-bottom:1px solid #333; font-size:12px">
-                        ${r.title} <button onclick="adminAction(${r.id}, '${r.user_id}')" style="float:right">❌</button>
-                    </div>`;
-                });
-            }
-        }
-
-        async function adminAction(itemId, badUser) {
-            if(!confirm("Kullanıcı banlansın mı?")) return;
-
-            // 1. Sil
-            await _client.from('items').delete().eq('id', itemId);
-            
-            // 2. 5 Dakika Ban At (ISO Date format)
-            const banUntil = new Date(Date.now() + 5 * 60000).toISOString();
-            await _client.from('site_users').upsert({ user_id: badUser, banned_until: banUntil });
-
-            alert("Kullanıcı 5 dakika banlandı.");
-            fetchNotes();
-            if(isAdmin) fetchReports();
-        }
-
-        // Başlat
-        window.onload = fetchNotes;
-
-    </script>
+    window.onload = load;
+</script>
 </body>
 </html>
