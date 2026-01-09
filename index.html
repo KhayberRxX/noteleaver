@@ -84,10 +84,20 @@
         input, textarea { width: 100%; background: #111; border: 1px solid #333; color: white; padding: 18px; margin-bottom: 20px; border-radius: 12px; font-size: 16px; }
         .save-btn { width: 100%; padding: 18px; background: var(--p); border: none; border-radius: 12px; font-weight: 900; cursor: pointer; font-size: 16px; }
 
-        /* --- HUD --- */
+        /* --- HUD & ADMIN BUTTON --- */
         #hud { position: fixed; bottom: 20px; left: 20px; display: flex; gap: 10px; z-index: 1000; }
         .chip { background: var(--ui); padding: 10px 20px; border-radius: 50px; border: 1px solid var(--border); font-size: 11px; font-family: 'JetBrains Mono'; color: #666; }
         .chip span { color: var(--p); }
+
+        #admin-trigger-btn {
+            position: fixed; bottom: 20px; right: 20px; z-index: 5000;
+            background: var(--ui); border: 1px solid var(--p); color: var(--p);
+            padding: 12px 24px; border-radius: 50px; font-family: 'JetBrains Mono';
+            font-weight: 800; cursor: pointer; transition: 0.3s; font-size: 12px;
+            box-shadow: 0 0 15px var(--p-glow);
+        }
+        #admin-trigger-btn:hover { background: var(--p); color: #000; box-shadow: 0 0 25px var(--p); }
+        #admin-trigger-btn.active { border-color: var(--danger); color: var(--danger); box-shadow: 0 0 15px rgba(255, 68, 68, 0.3); }
     </style>
 </head>
 <body>
@@ -104,6 +114,8 @@
     <div class="chip">ZOOM: <span id="val-z">100%</span></div>
     <div id="admin-indicator" class="chip" style="display:none; border-color:var(--p)">MODE: <span>ADMIN</span></div>
 </div>
+
+<button id="admin-trigger-btn" onclick="Engine.toggleAdmin()">YÖNETİCİ GİRİŞİ</button>
 
 <div id="ctx">
     <div class="ctx-item" id="ctx-note" onclick="Engine.openModal('note')">📝 Not Bırak</div>
@@ -147,15 +159,34 @@ const Engine = {
 
     init: async function() {
         this.state.db = supabase.createClient(this.config.SB_URL, this.config.SB_KEY);
-        if(this.state.isAdmin) document.getElementById('admin-indicator').style.display = 'block';
+        const btn = document.getElementById('admin-trigger-btn');
+        if(this.state.isAdmin) {
+            document.getElementById('admin-indicator').style.display = 'block';
+            btn.innerText = "YÖNETİCİDEN ÇIK";
+            btn.classList.add('active');
+        }
         this.bind();
         this.spawn();
         await this.load();
     },
 
+    toggleAdmin: function() {
+        if(this.state.isAdmin) {
+            localStorage.setItem('isAdmin', 'false');
+            location.reload();
+        } else {
+            const pass = prompt("Yönetici Şifresi:");
+            if(pass === this.config.ADMIN_PASS) {
+                localStorage.setItem('isAdmin', 'true');
+                location.reload();
+            } else {
+                alert("Hatalı Şifre!");
+            }
+        }
+    },
+
     bind: function() {
         const cam = document.getElementById('camera');
-
         window.onmousedown = (e) => {
             if(e.button === 0 && (e.target.id === 'viewport' || e.target.id === 'camera')) {
                 this.state.isDrag = true;
@@ -164,7 +195,6 @@ const Engine = {
             }
         };
         window.onmouseup = () => this.state.isDrag = false;
-
         window.onmousemove = (e) => {
             if(this.state.isDrag) {
                 this.state.x += (e.clientX - this.state.lastM.x);
@@ -177,7 +207,6 @@ const Engine = {
             const wy = Math.round((e.clientY - rect.top) / this.state.scale);
             document.getElementById('val-xy').innerText = `${wx}, ${wy}`;
         };
-
         window.onwheel = (e) => {
             e.preventDefault();
             const zSpeed = 0.04;
@@ -192,7 +221,6 @@ const Engine = {
             cam.style.transition = "none";
             this.update();
         };
-
         window.oncontextmenu = (e) => {
             e.preventDefault();
             const rect = cam.getBoundingClientRect();
@@ -203,21 +231,7 @@ const Engine = {
             const m = document.getElementById('ctx');
             m.style.display = 'block'; m.style.left = e.clientX + 'px'; m.style.top = e.clientY + 'px';
         };
-
         window.onclick = () => document.getElementById('ctx').style.display = 'none';
-
-        // Admin Kısayolu: "A" tuşu
-        window.onkeydown = (e) => {
-            if(e.key.toLowerCase() === 'a') {
-                const pass = prompt("Yönetici Şifresi:");
-                if(pass === this.config.ADMIN_PASS) {
-                    this.state.isAdmin = true;
-                    localStorage.setItem('isAdmin', 'true');
-                    alert("Yönetici moduna girildi!");
-                    location.reload();
-                }
-            }
-        };
     },
 
     update: function() {
@@ -255,7 +269,7 @@ const Engine = {
     },
 
     report: async function(id) {
-        if(!confirm("Raporlamak istiyor musunuz?")) return;
+        if(!confirm("Bu içeriği raporlamak istiyor musunuz?")) return;
         await this.state.db.from('items').update({ is_reported: true }).eq('id', id);
         alert("Bildirildi!");
     },
@@ -279,9 +293,7 @@ const Engine = {
             }
             
             el.innerHTML = html;
-            if(item.type === 'library') {
-                el.onclick = () => this.enterRoom(item.title);
-            }
+            if(item.type === 'library') el.onclick = () => this.enterRoom(item.title);
             document.getElementById('camera').appendChild(el);
         });
     },
