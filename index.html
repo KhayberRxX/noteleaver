@@ -1,812 +1,1057 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leave a Note</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase/2.39.0/supabase.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
-            background: #1a1a2e;
-        }
-        #header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: #16213e;
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 1000;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-        }
-        #logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: #0f3460;
-            font-size: 24px;
-            font-weight: bold;
-        }
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 18px;
-        }
-        .logo-text {
-            color: #e94560;
-        }
-        #controls {
-            display: flex;
-            gap: 10px;
-        }
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        #addNoteBtn {
-            background: #e94560;
-            color: white;
-        }
-        #addNoteBtn:hover {
-            background: #d63447;
-        }
-        #addDrawingBtn {
-            background: #764ba2;
-            color: white;
-        }
-        #addDrawingBtn:hover {
-            background: #5e3a7e;
-        }
-        #addLibraryBtn {
-            background: #28a745;
-            color: white;
-        }
-        #addLibraryBtn:hover {
-            background: #218838;
-        }
-        #addLibraryBtn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-        }
-        #adminBtn {
-            background: transparent;
-            color: #e94560;
-            font-size: 20px;
-            padding: 5px 10px;
-        }
-        #adminBtn:hover {
-            background: rgba(233, 69, 96, 0.1);
-        }
-        #mapContainer {
-            position: fixed;
-            top: 70px;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            overflow: hidden;
-            cursor: grab;
-            background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
-        }
-        #mapContainer.grabbing {
-            cursor: grabbing;
-        }
-        #map {
-            position: absolute;
-            width: 10000px;
-            height: 10000px;
-        }
-        .note, .library {
-            position: absolute;
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            min-width: 200px;
-            max-width: 300px;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        .note:hover, .library:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.4);
-        }
-        .note-title {
-            font-weight: bold;
-            margin-bottom: 8px;
-            color: #16213e;
-        }
-        .note-content {
-            color: #555;
-            word-wrap: break-word;
-        }
-        .drawing-note {
-            background: #f8f9fa;
-        }
-        .drawing-note canvas {
-            border: 2px solid #dee2e6;
-            border-radius: 4px;
-            max-width: 100%;
-        }
-        .library {
-            border: 5px solid #28a745;
-            background: #d4edda;
-            min-width: 400px;
-            min-height: 300px;
-        }
-        .library-title {
-            font-size: 24px;
-            font-weight: bold;
-            color: #155724;
-            text-align: center;
-            margin-bottom: 20px;
-            border-bottom: 3px solid #28a745;
-            padding-bottom: 10px;
-        }
-        .library-content {
-            color: #155724;
-            font-size: 16px;
-        }
-        .report-btn {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            padding: 5px 10px;
-            font-size: 12px;
-            cursor: pointer;
-            z-index: 10;
-        }
-        .report-btn:hover {
-            background: #c82333;
-        }
-        #coordinates {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(22, 33, 62, 0.9);
-            color: #e94560;
-            padding: 10px 15px;
-            border-radius: 5px;
-            font-family: 'Courier New', monospace;
-            z-index: 999;
-            font-weight: bold;
-        }
-        #libraryCounter {
-            position: fixed;
-            bottom: 60px;
-            right: 20px;
-            background: rgba(40, 167, 69, 0.9);
-            color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            font-weight: bold;
-            z-index: 999;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.7);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal.active {
-            display: flex;
-        }
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        .modal-content h2 {
-            margin-bottom: 20px;
-            color: #16213e;
-        }
-        .modal-content input, .modal-content textarea {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 15px;
-            border: 2px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
-        }
-        .modal-content textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-        .modal-buttons {
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-        .modal-buttons button {
-            padding: 10px 20px;
-        }
-        .cancel-btn {
-            background: #6c757d;
-            color: white;
-        }
-        .cancel-btn:hover {
-            background: #5a6268;
-        }
-        .save-btn {
-            background: #e94560;
-            color: white;
-        }
-        .save-btn:hover {
-            background: #d63447;
-        }
-        #drawingCanvas {
-            border: 2px solid #ddd;
-            cursor: crosshair;
-            background: white;
-        }
-        .drawing-controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-        .drawing-controls button {
-            padding: 8px 15px;
-            font-size: 14px;
-        }
-        .color-btn {
-            width: 40px;
-            height: 40px;
-            border: 2px solid #ddd;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .color-btn.active {
-            border-color: #000;
-            border-width: 3px;
-        }
-        #adminPanel {
-            max-height: 600px;
-            overflow-y: auto;
-        }
-        .reported-item {
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-        }
-        .reported-item h4 {
-            color: #721c24;
-            margin-bottom: 10px;
-        }
-        .reported-item p {
-            color: #721c24;
-            margin-bottom: 5px;
-        }
-        .ban-btn {
-            background: #dc3545;
-            color: white;
-            padding: 8px 15px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        .ban-btn:hover {
-            background: #c82333;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Leave a Note</title>
+  <style>
+    :root{
+      --bg:#0b0d10; --panel:#10141a; --panel2:#0f1318; --text:#e7eef8; --muted:#93a4b7;
+      --accent:#7c5cff; --danger:#ff4d4d; --note:#1a2230; --stroke:#223044; --lib:#1c2a20; --libStroke:#2bff6a;
+      --warn:#ffcc66; --ok:#66ffa6;
+      --shadow: 0 14px 40px rgba(0,0,0,.55);
+      --r:14px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;overflow:hidden}
+    a{color:inherit}
+
+    #topbar{position:fixed;inset:12px 12px auto 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:50;pointer-events:none}
+    .brand{display:flex;align-items:center;gap:10px;pointer-events:auto}
+    .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(145deg,rgba(124,92,255,.25),rgba(124,92,255,.05));border:1px solid rgba(124,92,255,.35);box-shadow:var(--shadow);display:grid;place-items:center}
+    .logo svg{display:block}
+    .brand h1{margin:0;font-size:15px;letter-spacing:.2px}
+    .brand .sub{color:var(--muted);font-size:12px;margin-top:1px}
+
+    .actions{display:flex;align-items:center;gap:10px;pointer-events:auto}
+    .chip{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(16,20,26,.7);backdrop-filter: blur(10px);box-shadow: 0 10px 30px rgba(0,0,0,.35)}
+    .chip b{font-weight:650}
+    .btnIcon{width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:rgba(16,20,26,.7);backdrop-filter: blur(10px);display:grid;place-items:center;cursor:pointer;user-select:none;box-shadow: 0 10px 30px rgba(0,0,0,.35)}
+    .btnIcon:hover{border-color:rgba(255,255,255,.18)}
+    .btnIcon:active{transform:translateY(1px)}
+
+    #boardWrap{position:fixed;inset:0;overflow:hidden;}
+    #board{position:absolute;left:0;top:0;transform:translate3d(0,0,0);will-change:transform}
+
+    #grid{position:fixed;inset:-2000px;pointer-events:none;opacity:.55;mix-blend-mode:screen}
+    #grid::before{
+      content:"";position:absolute;inset:0;
+      background:
+        radial-gradient(circle at 1px 1px, rgba(255,255,255,.06) 1px, transparent 0) 0 0/44px 44px,
+        radial-gradient(circle at 1px 1px, rgba(124,92,255,.10) 1px, transparent 0) 0 0/220px 220px;
+    }
+
+    .item{position:absolute;min-width:220px;max-width:340px;border-radius:var(--r);border:1px solid rgba(255,255,255,.08);
+      background:linear-gradient(180deg, rgba(26,34,48,.92), rgba(16,20,26,.90));
+      box-shadow: 0 14px 35px rgba(0,0,0,.55);
+      overflow:hidden;
+    }
+    .item.library{
+      min-width:340px;max-width:460px;
+      border:1px solid rgba(43,255,106,.45);
+      box-shadow: 0 18px 48px rgba(0,0,0,.6);
+      background:linear-gradient(180deg, rgba(28,42,32,.92), rgba(16,20,26,.90));
+    }
+    .item.report{
+      min-width:280px;max-width:420px;
+      border:1px solid rgba(255,204,102,.35);
+      background:linear-gradient(180deg, rgba(40,34,20,.92), rgba(16,20,26,.90));
+    }
+    .item .head{padding:10px 12px 6px 12px;display:flex;align-items:flex-start;gap:10px}
+    .badge{width:26px;height:26px;border-radius:10px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.05);flex:0 0 auto}
+    .library .badge{border-color:rgba(43,255,106,.35);background:rgba(43,255,106,.08)}
+    .report .badge{border-color:rgba(255,204,102,.35);background:rgba(255,204,102,.10)}
+    .title{font-weight:700;letter-spacing:.2px;word-break:break-word}
+    .meta{color:var(--muted);font-size:11px;margin-top:2px}
+    .item .body{padding:0 12px 12px 12px;color:#d7e2f0;white-space:pre-wrap;word-break:break-word}
+    .drawWrap{padding:0 12px 12px}
+    .drawImg{width:100%;max-height:220px;object-fit:contain;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.25)}
+    .item .foot{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);background:rgba(15,19,24,.55)}
+    .small{font-size:11px;color:var(--muted)}
+    .dangerBtn{display:none;gap:8px;align-items:center;border:none;border-radius:12px;padding:8px 10px;background:rgba(255,77,77,.14);
+      color:#ffd7d7;border:1px solid rgba(255,77,77,.28);cursor:pointer}
+    .dangerBtn:hover{background:rgba(255,77,77,.18)}
+    .dangerBtn:active{transform:translateY(1px)}
+
+    .ghostBtn{gap:8px;align-items:center;border:none;border-radius:12px;padding:8px 10px;background:rgba(255,255,255,.06);
+      color:var(--text);border:1px solid rgba(255,255,255,.10);cursor:pointer;display:inline-flex}
+    .ghostBtn:hover{background:rgba(255,255,255,.08)}
+    .ghostBtn:active{transform:translateY(1px)}
+
+    #menu{position:fixed;z-index:80;display:none;min-width:240px;max-width:300px;border-radius:16px;background:rgba(16,20,26,.86);
+      border:1px solid rgba(255,255,255,.10);box-shadow:var(--shadow);backdrop-filter: blur(12px);overflow:hidden}
+    #menu .mhead{padding:12px 12px 10px;border-bottom:1px solid rgba(255,255,255,.08)}
+    #menu .mhead b{display:block}
+    #menu .mhead span{color:var(--muted);font-size:12px}
+    #menu button{width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:space-between}
+    #menu button:hover{background:rgba(255,255,255,.06)}
+    #menu button small{color:var(--muted)}
+
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:120}
+    .modal{width:min(560px, calc(100% - 24px));border-radius:18px;background:rgba(16,20,26,.9);border:1px solid rgba(255,255,255,.10);box-shadow:var(--shadow);backdrop-filter: blur(12px)}
+    .modal header{padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between}
+    .modal header b{font-size:13px;letter-spacing:.2px}
+    .modal .content{padding:14px}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    .field{flex:1 1 220px;display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+    input,textarea,select{width:100%;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(10,12,15,.7);color:var(--text);padding:10px 12px;outline:none}
+    textarea{min-height:110px;resize:vertical}
+    input:focus,textarea:focus,select:focus{border-color:rgba(124,92,255,.45)}
+    .modal .actions{padding:12px 14px 14px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+    .btn{border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:var(--text);padding:10px 12px;cursor:pointer}
+    .btn:hover{background:rgba(255,255,255,.08)}
+    .btn.primary{border-color:rgba(124,92,255,.35);background:rgba(124,92,255,.16)}
+    .btn.primary:hover{background:rgba(124,92,255,.20)}
+    .btn.warn{border-color:rgba(255,204,102,.35);background:rgba(255,204,102,.12)}
+    .btn.warn:hover{background:rgba(255,204,102,.16)}
+    .btn:active{transform:translateY(1px)}
+
+    /* drawing */
+    .drawBar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 10px}
+    .drawBar .chip{box-shadow:none}
+    canvas#sketch{width:100%;height:220px;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.25);touch-action:none}
+
+    #coords{position:fixed;right:12px;bottom:12px;z-index:60;pointer-events:none}
+    #coords .chip{pointer-events:none}
+
+    #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:200;display:none}
+    #toast .chip{border-color:rgba(255,255,255,.10)}
+
+    @media (max-width:720px){
+      .brand h1{font-size:14px}
+      .item{min-width:200px}
+      .item.library{min-width:280px}
+    }
+  </style>
 </head>
 <body>
-    <div id="header">
-        <div id="logo">
-            <div class="logo-icon">LN</div>
-            <div class="logo-text">Leave a Note</div>
-        </div>
-        <div id="controls">
-            <button id="addNoteBtn">📝 Not Ekle</button>
-            <button id="addDrawingBtn">🎨 Çizim Ekle</button>
-            <button id="addLibraryBtn">📚 Kütüphane (<span id="libraryCount">3</span>)</button>
-            <button id="adminBtn">⚙️</button>
-        </div>
+  <div id="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <path d="M7 6v12h3" stroke="rgba(231,238,248,.95)" stroke-width="2" stroke-linecap="round"/>
+          <path d="M14 6v12" stroke="rgba(231,238,248,.95)" stroke-width="2" stroke-linecap="round"/>
+          <path d="M14 12c0-3 2-5 5-5" stroke="rgba(124,92,255,.9)" stroke-width="2" stroke-linecap="round"/>
+          <path d="M14 12c0 3 2 5 5 5" stroke="rgba(124,92,255,.9)" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Leave a Note</h1>
+        <div class="sub">Sonsuz harita • Notlar &amp; Kütüphaneler</div>
+      </div>
     </div>
 
-    <div id="mapContainer">
-        <div id="map"></div>
+    <div class="actions">
+      <div class="chip" title="Kütüphane hakkı">
+        <span aria-hidden="true">📚</span>
+        <span>Kalan: <b id="credits">3</b></span>
+      </div>
+      <div class="chip" id="adminChip" style="display:none" title="Admin mod">
+        <span aria-hidden="true">🛡️</span>
+        <span><b>Admin</b></span>
+      </div>
+      <div class="btnIcon" id="gear" title="Admin">
+        <span aria-hidden="true">⚙️</span>
+      </div>
     </div>
+  </div>
 
-    <div id="coordinates">X: 0, Y: 0</div>
-    <div id="libraryCounter">Kalan Kütüphane: <span id="libraryCountBottom">3</span></div>
+  <div id="boardWrap">
+    <div id="grid"></div>
+    <div id="board" aria-label="Sonsuz harita"></div>
+  </div>
 
-    <!-- Not Ekleme Modal -->
-    <div id="noteModal" class="modal">
-        <div class="modal-content">
-            <h2>Yeni Not</h2>
-            <input type="text" id="noteTitle" placeholder="Başlık">
-            <textarea id="noteContent" placeholder="İçerik"></textarea>
-            <div class="modal-buttons">
-                <button class="cancel-btn" onclick="closeModal('noteModal')">İptal</button>
-                <button class="save-btn" onclick="saveNote()">Kaydet</button>
+  <div id="coords"><div class="chip"><span style="color:var(--muted)">X</span> <b id="cx">0</b> <span style="color:var(--muted)">Y</span> <b id="cy">0</b></div></div>
+
+  <div id="menu" role="menu" aria-hidden="true">
+    <div class="mhead"><b>Yeni içerik ekle</b><span id="menupos">(0, 0)</span></div>
+    <button id="addNote" role="menuitem"><span>📝 Not</span><small>Normal</small></button>
+    <button id="addLib" role="menuitem"><span>📚 Kütüphane</span><small>Yeşil çerçeve</small></button>
+  </div>
+
+  <!-- Create/Edit modal -->
+  <div class="overlay" id="modalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <header>
+        <b id="modalTitle">Ekle</b>
+        <div class="btnIcon" id="closeModal" title="Kapat" style="width:34px;height:34px;border-radius:12px;box-shadow:none">✕</div>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div class="field">
+            <label class="small" for="t">Başlık</label>
+            <input id="t" autocomplete="off" maxlength="80" placeholder="Başlık..." />
+          </div>
+          <div class="field" style="flex:0 1 160px">
+            <label class="small" for="drawMode">Çizim</label>
+            <select id="drawMode">
+              <option value="on">Açık</option>
+              <option value="off">Kapalı</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="small" for="c">İçerik</label>
+          <textarea id="c" maxlength="4000" placeholder="İçerik..."></textarea>
+        </div>
+
+        <div id="drawArea" style="display:block">
+          <div class="drawBar">
+            <div class="chip"><span>✏️</span> <b>Çiz</b></div>
+            <button class="btn" id="pen">Kalem</button>
+            <button class="btn" id="eraser">Silgi</button>
+            <button class="btn warn" id="clearDraw">Temizle</button>
+            <div class="chip"><span style="color:var(--muted)">Kalınlık</span> <b id="th">3</b></div>
+            <input id="thick" type="range" min="1" max="12" value="3" style="flex:1 1 160px" />
+          </div>
+          <canvas id="sketch" width="900" height="520" aria-label="Çizim alanı"></canvas>
+          <div class="small" style="margin-top:8px;color:var(--muted)">Not: Çizim, notla birlikte kaydedilir.</div>
+        </div>
+
+        <div class="small" id="hint" style="margin-top:10px">Sağ tık / uzun basış ile ekle menüsü açılır. Sürükleyerek haritayı kaydır.</div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="cancel">Vazgeç</button>
+        <button class="btn primary" id="save">Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report modal -->
+  <div class="overlay" id="reportOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+      <header>
+        <b id="reportTitle">Raporla</b>
+        <div class="btnIcon" id="closeReport" title="Kapat" style="width:34px;height:34px;border-radius:12px;box-shadow:none">✕</div>
+      </header>
+      <div class="content">
+        <div class="small" id="reportTarget" style="margin-bottom:10px;color:var(--muted)">—</div>
+        <div class="field">
+          <label class="small" for="reason">Sebep</label>
+          <textarea id="reason" maxlength="600" placeholder="Kısa açıklama..."></textarea>
+        </div>
+        <div class="small" style="color:var(--muted)">Rapor, admin panelinde görünür (admin isterse kapatabilir).</div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="reportCancel">Vazgeç</button>
+        <button class="btn warn" id="reportSend">Rapor Gönder</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin modal -->
+  <div class="overlay" id="adminOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+      <header>
+        <b id="adminTitle">Admin</b>
+        <div class="btnIcon" id="closeAdmin" title="Kapat" style="width:34px;height:34px;border-radius:12px;box-shadow:none">✕</div>
+      </header>
+      <div class="content">
+        <div id="adminLogin" style="display:block">
+          <div class="field">
+            <label class="small" for="pw">Şifre</label>
+            <input id="pw" type="password" autocomplete="current-password" placeholder="••••••••" />
+          </div>
+          <div class="small" id="adminState" style="margin-top:6px;color:var(--muted)">⚠️ Gizli admin sistemi</div>
+        </div>
+
+        <div id="adminTools" style="display:none">
+          <div class="row" style="align-items:center;justify-content:space-between">
+            <div class="chip"><span>🛠️</span> <b>Admin Araçları</b></div>
+            <button class="btn" id="adminLogout">Çıkış</button>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <div class="field">
+              <label class="small">Rapor Sistemi</label>
+              <select id="toggleReporting">
+                <option value="on">Açık</option>
+                <option value="off">Kapalı</option>
+              </select>
             </div>
-        </div>
-    </div>
-
-    <!-- Çizim Modal -->
-    <div id="drawingModal" class="modal">
-        <div class="modal-content">
-            <h2>Yeni Çizim</h2>
-            <input type="text" id="drawingTitle" placeholder="Başlık">
-            <div class="drawing-controls">
-                <button class="color-btn active" style="background: black;" data-color="black"></button>
-                <button class="color-btn" style="background: red;" data-color="red"></button>
-                <button class="color-btn" style="background: blue;" data-color="blue"></button>
-                <button class="color-btn" style="background: green;" data-color="green"></button>
-                <button class="color-btn" style="background: yellow;" data-color="yellow"></button>
-                <button onclick="clearCanvas()">🗑️ Temizle</button>
+            <div class="field">
+              <label class="small">Raporları Haritada Göster</label>
+              <select id="toggleShowReports">
+                <option value="off">Kapalı</option>
+                <option value="on">Açık</option>
+              </select>
             </div>
-            <canvas id="drawingCanvas" width="400" height="300"></canvas>
-            <div class="modal-buttons">
-                <button class="cancel-btn" onclick="closeModal('drawingModal')">İptal</button>
-                <button class="save-btn" onclick="saveDrawing()">Kaydet</button>
-            </div>
+          </div>
+          <div class="row">
+            <button class="btn warn" id="openReports">Raporlar Paneli</button>
+            <button class="btn" id="reload">Yenile</button>
+          </div>
+          <div class="small" style="margin-top:10px;color:var(--muted)">Not: Bu admin sistemi tarayıcı tarafında olduğu için “gerçek güvenlik” sağlamaz. Güvenli admin için server/edge function gerekir.</div>
         </div>
+      </div>
+      <div class="actions" id="adminActions">
+        <button class="btn" id="adminCancel">Kapat</button>
+        <button class="btn primary" id="adminOk">Giriş</button>
+      </div>
     </div>
+  </div>
 
-    <!-- Kütüphane Modal -->
-    <div id="libraryModal" class="modal">
-        <div class="modal-content">
-            <h2>Yeni Kütüphane</h2>
-            <input type="text" id="libraryTitle" placeholder="Kütüphane Adı">
-            <textarea id="libraryContent" placeholder="Açıklama"></textarea>
-            <div class="modal-buttons">
-                <button class="cancel-btn" onclick="closeModal('libraryModal')">İptal</button>
-                <button class="save-btn" onclick="saveLibrary()">Kaydet</button>
-            </div>
+  <!-- Reports list modal -->
+  <div class="overlay" id="reportsOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reportsTitle">
+      <header>
+        <b id="reportsTitle">Raporlar</b>
+        <div class="btnIcon" id="closeReports" title="Kapat" style="width:34px;height:34px;border-radius:12px;box-shadow:none">✕</div>
+      </header>
+      <div class="content">
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Raporlar, aynı <b>items</b> tablosunda <b>type=report</b> olarak saklanır.</div>
+        <div id="reportsList" style="display:flex;flex-direction:column;gap:10px"></div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="reportsClose">Kapat</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"><div class="chip" id="toastText">...</div></div>
+
+  <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+    // ====== Config ======
+    const SUPABASE_URL = "https://ssfgvjudifodfhovhpzx.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo";
+    const TABLE = "items";
+
+    // ====== Helpers ======
+    const $ = (s, r=document) => r.querySelector(s);
+    const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+    const uid = () => (crypto.randomUUID ? crypto.randomUUID() : (Date.now()+"-"+Math.random().toString(16).slice(2)));
+    const fmt = (n)=> (Math.round(Number(n)||0)).toString();
+    const toast = (msg, ms=1600)=>{
+      const el = $("#toast"), t=$("#toastText");
+      t.textContent = msg;
+      el.style.display = "block";
+      clearTimeout(toast._t);
+      toast._t = setTimeout(()=> el.style.display="none", ms);
+    };
+
+    // Content packing: supports old plain text + new JSON {text, draw}
+    const packContent = (text, draw)=> JSON.stringify({ text: text||"", draw: draw||"" });
+    const unpackContent = (raw)=>{
+      if (raw && typeof raw === "string" && raw.trim().startsWith("{")){
+        try{
+          const o = JSON.parse(raw);
+          if (o && typeof o === "object") return { text: String(o.text||""), draw: String(o.draw||"") };
+        }catch{}
+      }
+      return { text: raw||"", draw: "" };
+    };
+
+    // Report payload stored in content JSON: { targetId, reason, by, ts }
+    const packReport = (targetId, reason, by)=> JSON.stringify({ targetId, reason, by, ts: Date.now() });
+    const unpackReport = (raw)=>{
+      try{ return JSON.parse(raw||"{}"); }catch{ return {}; }
+    };
+
+    // ====== State ======
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+
+    const boardWrap = $("#boardWrap");
+    const board = $("#board");
+    const grid = $("#grid");
+
+    const menu = $("#menu");
+    const menupos = $("#menupos");
+    const addNoteBtn = $("#addNote");
+    const addLibBtn = $("#addLib");
+
+    const modalOverlay = $("#modalOverlay");
+    const closeModal = $("#closeModal");
+    const cancelBtn = $("#cancel");
+    const saveBtn = $("#save");
+    const modalTitle = $("#modalTitle");
+    const inputT = $("#t");
+    const inputC = $("#c");
+    const drawMode = $("#drawMode");
+    const drawArea = $("#drawArea");
+
+    const gear = $("#gear");
+    const adminOverlay = $("#adminOverlay");
+    const closeAdmin = $("#closeAdmin");
+    const adminCancel = $("#adminCancel");
+    const adminOk = $("#adminOk");
+    const pw = $("#pw");
+    const adminState = $("#adminState");
+    const adminLogin = $("#adminLogin");
+    const adminTools = $("#adminTools");
+    const adminActions = $("#adminActions");
+    const adminChip = $("#adminChip");
+
+    const toggleReporting = $("#toggleReporting");
+    const toggleShowReports = $("#toggleShowReports");
+    const openReports = $("#openReports");
+    const reloadBtn = $("#reload");
+    const adminLogout = $("#adminLogout");
+
+    const reportsOverlay = $("#reportsOverlay");
+    const closeReports = $("#closeReports");
+    const reportsClose = $("#reportsClose");
+    const reportsList = $("#reportsList");
+
+    const reportOverlay = $("#reportOverlay");
+    const closeReport = $("#closeReport");
+    const reportCancel = $("#reportCancel");
+    const reportSend = $("#reportSend");
+    const reportTarget = $("#reportTarget");
+    const reason = $("#reason");
+
+    const cx = $("#cx"), cy = $("#cy");
+    const creditsEl = $("#credits");
+
+    // drawing canvas
+    const sketch = $("#sketch");
+    const penBtn = $("#pen");
+    const eraserBtn = $("#eraser");
+    const clearDraw = $("#clearDraw");
+    const thick = $("#thick");
+    const th = $("#th");
+
+    const LS_USER = "ln_user_id";
+    const LS_CREDITS = "ln_library_credits";
+    const SS_ADMIN = "ln_admin";
+    const LS_REPORTING = "ln_reporting";
+    const LS_SHOW_REPORTS = "ln_show_reports";
+
+    const user_id = localStorage.getItem(LS_USER) || (localStorage.setItem(LS_USER, uid()), localStorage.getItem(LS_USER));
+    let libraryCredits = Number(localStorage.getItem(LS_CREDITS));
+    if (!Number.isFinite(libraryCredits)) libraryCredits = 3;
+    libraryCredits = clamp(libraryCredits, 0, 999);
+    localStorage.setItem(LS_CREDITS, String(libraryCredits));
+
+    let isAdmin = sessionStorage.getItem(SS_ADMIN) === "1";
+    let reportingEnabled = (localStorage.getItem(LS_REPORTING) ?? "on") === "on";
+    let showReports = (localStorage.getItem(LS_SHOW_REPORTS) ?? "off") === "on";
+
+    const items = new Map(); // id -> row
+
+    // Camera/pan
+    let camX = 0, camY = 0;
+    let dragging = false;
+    let dragStart = {x:0,y:0,cx:0,cy:0};
+    let mouse = {x:0,y:0, wx:0, wy:0};
+    let ctxWorld = {x:0,y:0};
+    let pendingType = "note";
+    let pendingReportTarget = null;
+
+    function setCredits(v){
+      libraryCredits = clamp(Number(v)||0,0,999);
+      localStorage.setItem(LS_CREDITS, String(libraryCredits));
+      creditsEl.textContent = String(libraryCredits);
+    }
+    setCredits(libraryCredits);
+
+    function setAdmin(on){
+      isAdmin = !!on;
+      sessionStorage.setItem(SS_ADMIN, on?"1":"0");
+      adminChip.style.display = on ? "flex" : "none";
+      adminState.textContent = on ? "✅ Admin mod aktif" : "⚠️ Gizli admin sistemi";
+      adminLogin.style.display = on ? "none" : "block";
+      adminTools.style.display = on ? "block" : "none";
+      adminActions.style.display = on ? "none" : "flex";
+      // sync tool selects
+      toggleReporting.value = reportingEnabled ? "on" : "off";
+      toggleShowReports.value = showReports ? "on" : "off";
+      renderAll();
+    }
+    setAdmin(isAdmin);
+
+    function setReporting(on){
+      reportingEnabled = !!on;
+      localStorage.setItem(LS_REPORTING, on?"on":"off");
+      toggleReporting.value = on?"on":"off";
+      renderAll();
+    }
+    function setShowReports(on){
+      showReports = !!on;
+      localStorage.setItem(LS_SHOW_REPORTS, on?"on":"off");
+      toggleShowReports.value = on?"on":"off";
+      renderAll();
+    }
+
+    function worldFromClient(clientX, clientY){
+      const r = boardWrap.getBoundingClientRect();
+      return { x: clientX - r.left - camX, y: clientY - r.top - camY };
+    }
+
+    function applyTransform(){
+      board.style.transform = `translate3d(${camX}px, ${camY}px, 0)`;
+      grid.style.transform = `translate3d(${camX}px, ${camY}px, 0)`;
+    }
+
+    function updateCoords(){
+      cx.textContent = fmt(mouse.wx);
+      cy.textContent = fmt(mouse.wy);
+    }
+
+    // ====== Menu & modals ======
+    function hideMenu(){ menu.style.display = "none"; menu.setAttribute("aria-hidden","true"); }
+    function showMenuAt(clientX, clientY, wx, wy){
+      ctxWorld = {x: wx, y: wy};
+      menupos.textContent = `(${fmt(wx)}, ${fmt(wy)})`;
+      const pad=10, mw=280, mh=150;
+      menu.style.display = "block";
+      menu.setAttribute("aria-hidden","false");
+      menu.style.left = clamp(clientX + 8, pad, window.innerWidth - mw - pad) + "px";
+      menu.style.top  = clamp(clientY + 8, pad, window.innerHeight - mh - pad) + "px";
+      addLibBtn.querySelector("small").textContent = libraryCredits>0 ? `Yeşil çerçeve • Kalan ${libraryCredits}` : "Hakkın yok";
+      addLibBtn.style.opacity = libraryCredits>0 ? "1" : ".45";
+    }
+
+    function openCreateModal(type){
+      pendingType = type;
+      hideMenu();
+      modalTitle.textContent = type === "library" ? "Kütüphane Ekle" : "Not Ekle";
+      inputT.value = "";
+      inputC.value = "";
+      drawMode.value = "on";
+      drawArea.style.display = "block";
+      clearSketch();
+      modalOverlay.style.display = "flex";
+      modalOverlay.setAttribute("aria-hidden","false");
+      setTimeout(()=> inputT.focus(), 0);
+    }
+    function closeCreateModal(){
+      modalOverlay.style.display = "none";
+      modalOverlay.setAttribute("aria-hidden","true");
+    }
+
+    function openAdmin(){
+      pw.value = "";
+      adminOverlay.style.display = "flex";
+      adminOverlay.setAttribute("aria-hidden","false");
+      setTimeout(()=> (isAdmin?null:pw.focus()), 0);
+    }
+    function closeAdminModal(){
+      adminOverlay.style.display = "none";
+      adminOverlay.setAttribute("aria-hidden","true");
+    }
+
+    function openReportModal(targetRow){
+      if (!reportingEnabled){ toast("Rapor sistemi kapalı"); return; }
+      pendingReportTarget = targetRow;
+      reason.value = "";
+      reportTarget.textContent = `Hedef: #${String(targetRow.id).slice(0,6)} • ${targetRow.type}`;
+      reportOverlay.style.display = "flex";
+      reportOverlay.setAttribute("aria-hidden","false");
+      setTimeout(()=> reason.focus(), 0);
+    }
+    function closeReportModal(){
+      reportOverlay.style.display = "none";
+      reportOverlay.setAttribute("aria-hidden","true");
+      pendingReportTarget = null;
+    }
+
+    function openReportsModal(){
+      if (!isAdmin){ toast("Admin değilsin"); return; }
+      rebuildReportsList();
+      reportsOverlay.style.display = "flex";
+      reportsOverlay.setAttribute("aria-hidden","false");
+    }
+    function closeReportsModal(){
+      reportsOverlay.style.display = "none";
+      reportsOverlay.setAttribute("aria-hidden","true");
+    }
+
+    // ====== Drawing ======
+    const dctx = sketch.getContext("2d", { alpha:true });
+    let drawing = false;
+    let mode = "pen";
+    let last = null;
+
+    function resizeSketchForHiDPI(){
+      const rect = sketch.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const w = Math.round(rect.width * dpr);
+      const h = Math.round(rect.height * dpr);
+      if (sketch.width !== w || sketch.height !== h){
+        const prev = sketch.toDataURL("image/png");
+        sketch.width = w; sketch.height = h;
+        dctx.setTransform(1,0,0,1,0,0);
+        dctx.lineCap = "round";
+        dctx.lineJoin = "round";
+        // restore
+        const img = new Image();
+        img.onload = ()=>{ dctx.drawImage(img, 0,0, w,h); };
+        img.src = prev;
+      }
+    }
+
+    function clearSketch(){
+      dctx.clearRect(0,0,sketch.width,sketch.height);
+    }
+
+    function pointerPos(ev){
+      const r = sketch.getBoundingClientRect();
+      const p = ("touches" in ev) ? ev.touches[0] : ev;
+      const x = (p.clientX - r.left) * (sketch.width / r.width);
+      const y = (p.clientY - r.top)  * (sketch.height / r.height);
+      return {x,y};
+    }
+
+    function drawLine(a,b){
+      dctx.globalCompositeOperation = (mode === "eraser") ? "destination-out" : "source-over";
+      dctx.strokeStyle = "rgba(255,255,255,.95)";
+      const w = Number(thick.value)||3;
+      dctx.lineWidth = w * (sketch.width / sketch.getBoundingClientRect().width);
+      dctx.beginPath();
+      dctx.moveTo(a.x,a.y);
+      dctx.lineTo(b.x,b.y);
+      dctx.stroke();
+    }
+
+    function startDraw(ev){
+      if (drawArea.style.display === "none") return;
+      drawing = true;
+      last = pointerPos(ev);
+    }
+    function moveDraw(ev){
+      if (!drawing) return;
+      ev.preventDefault?.();
+      const p = pointerPos(ev);
+      drawLine(last,p);
+      last = p;
+    }
+    function endDraw(){ drawing = false; last = null; }
+
+    function exportSketch(){
+      // if almost empty, return ""
+      const img = dctx.getImageData(0,0,sketch.width,sketch.height).data;
+      let nonZero = 0;
+      for (let i=3;i<img.length;i+=4){ if (img[i] !== 0){ nonZero++; if (nonZero>250) break; } }
+      if (nonZero <= 250) return "";
+      return sketch.toDataURL("image/png", 0.92);
+    }
+
+    penBtn.addEventListener("click", ()=>{ mode = "pen"; toast("Kalem"); });
+    eraserBtn.addEventListener("click", ()=>{ mode = "eraser"; toast("Silgi"); });
+    clearDraw.addEventListener("click", ()=>{ clearSketch(); toast("Temizlendi"); });
+    thick.addEventListener("input", ()=>{ th.textContent = String(thick.value); });
+
+    drawMode.addEventListener("change", ()=>{
+      drawArea.style.display = drawMode.value === "on" ? "block" : "none";
+    });
+
+    sketch.addEventListener("pointerdown", (e)=>{ sketch.setPointerCapture(e.pointerId); startDraw(e); });
+    sketch.addEventListener("pointermove", moveDraw, {passive:false});
+    sketch.addEventListener("pointerup", endDraw);
+    sketch.addEventListener("pointercancel", endDraw);
+
+    // ====== Render ======
+    function iconFor(type){
+      if (type === "library") return "📚";
+      if (type === "report") return "🚩";
+      return "📝";
+    }
+
+    function shouldRender(row){
+      if (row.type === "report") return isAdmin && showReports; // only admin sees on map when enabled
+      return true;
+    }
+
+    function elItem(row){
+      const div = document.createElement("div");
+      div.className = "item" + (row.type === "library" ? " library" : row.type === "report" ? " report" : "");
+      div.dataset.id = row.id;
+
+      const content = (row.type === "report") ? { text: row.content||"", draw:"" } : unpackContent(row.content);
+
+      div.innerHTML = `
+        <div class="head">
+          <div class="badge" aria-hidden="true">${iconFor(row.type)}</div>
+          <div style="min-width:0">
+            <div class="title"></div>
+            <div class="meta"></div>
+          </div>
         </div>
-    </div>
-
-    <!-- Admin Login Modal -->
-    <div id="adminLoginModal" class="modal">
-        <div class="modal-content">
-            <h2>Admin Girişi</h2>
-            <input type="password" id="adminPassword" placeholder="Şifre">
-            <div class="modal-buttons">
-                <button class="cancel-btn" onclick="closeModal('adminLoginModal')">İptal</button>
-                <button class="save-btn" onclick="checkAdminPassword()">Giriş</button>
-            </div>
+        <div class="body"></div>
+        <div class="drawWrap" style="display:none"><img class="drawImg" alt="Çizim" /></div>
+        <div class="foot">
+          <div class="small">#${String(row.id).slice(0,6)}</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="ghostBtn" type="button" data-act="report">🚩 RAPOR</button>
+            <button class="dangerBtn" type="button">🗑️ SİL</button>
+          </div>
         </div>
-    </div>
+      `;
 
-    <!-- Admin Panel Modal -->
-    <div id="adminPanelModal" class="modal">
-        <div class="modal-content">
-            <h2>Rapor Edilenler</h2>
-            <div id="adminPanel"></div>
-            <div class="modal-buttons">
-                <button class="cancel-btn" onclick="closeModal('adminPanelModal')">Kapat</button>
+      div.querySelector(".title").textContent = row.title || (row.type === "library" ? "(Kütüphane)" : row.type==="report" ? "(Rapor)" : "(Not)");
+      div.querySelector(".body").textContent = content.text || "";
+      div.querySelector(".meta").textContent = `X ${fmt(row.x)} • Y ${fmt(row.y)}`;
+
+      const dw = div.querySelector(".drawWrap");
+      const img = div.querySelector(".drawImg");
+      if (content.draw){
+        dw.style.display = "block";
+        img.src = content.draw;
+      }
+
+      div.style.left = (Number(row.x)||0) + "px";
+      div.style.top  = (Number(row.y)||0) + "px";
+
+      // report button
+      const reportBtn = div.querySelector('[data-act="report"]');
+      if (row.type === "report" || !reportingEnabled) reportBtn.style.display = "none";
+      reportBtn.addEventListener("click", (e)=>{ e.stopPropagation(); openReportModal(row); });
+
+      // delete button
+      const del = div.querySelector(".dangerBtn");
+      if (isAdmin){
+        del.style.display = "inline-flex";
+        del.addEventListener("click", (e)=>{ e.stopPropagation(); deleteItem(row.id); });
+      }
+
+      div.addEventListener("mousedown", (e)=>{ e.stopPropagation(); });
+      div.addEventListener("touchstart", (e)=>{ e.stopPropagation(); }, {passive:true});
+      return div;
+    }
+
+    function renderAll(){
+      board.innerHTML = "";
+      for (const row of items.values()) if (shouldRender(row)) board.appendChild(elItem(row));
+    }
+
+    function upsertRow(row){
+      if (!row || row.id==null) return;
+      items.set(row.id, row);
+      // fast path: re-render that element (or add) respecting filters
+      const idStr = String(row.id);
+      const existing = board.querySelector(`.item[data-id="${CSS.escape(idStr)}"]`);
+      if (!shouldRender(row)){
+        if (existing) existing.remove();
+        return;
+      }
+      if (existing){
+        // update minimal
+        existing.className = "item" + (row.type === "library" ? " library" : row.type === "report" ? " report" : "");
+        existing.style.left = (Number(row.x)||0) + "px";
+        existing.style.top  = (Number(row.y)||0) + "px";
+        const content = (row.type === "report") ? {text: row.content||"", draw:""} : unpackContent(row.content);
+        existing.querySelector(".title").textContent = row.title || (row.type==="library"?"(Kütüphane)":row.type==="report"?"(Rapor)":"(Not)");
+        existing.querySelector(".body").textContent = content.text || "";
+        existing.querySelector(".meta").textContent = `X ${fmt(row.x)} • Y ${fmt(row.y)}`;
+        const dw = existing.querySelector(".drawWrap");
+        const img = existing.querySelector(".drawImg");
+        if (content.draw){ dw.style.display="block"; img.src = content.draw; } else { dw.style.display="none"; img.removeAttribute("src"); }
+        const del = existing.querySelector(".dangerBtn");
+        del.style.display = isAdmin ? "inline-flex" : "none";
+        const reportBtn = existing.querySelector('[data-act="report"]');
+        reportBtn.style.display = (row.type==="report"||!reportingEnabled) ? "none" : "inline-flex";
+      } else {
+        board.appendChild(elItem(row));
+      }
+    }
+
+    function removeRow(id){
+      items.delete(id);
+      const el = board.querySelector(`.item[data-id="${CSS.escape(String(id))}"]`);
+      if (el) el.remove();
+    }
+
+    // ====== Data ======
+    async function loadItems(){
+      const { data, error } = await supabase.from(TABLE).select("id,title,content,x,y,type,user_id").order("id", { ascending: true });
+      if (error){
+        console.error(error);
+        toast("Supabase: izin/RLS");
+        return;
+      }
+      items.clear();
+      for (const row of data || []) items.set(row.id, row);
+      renderAll();
+    }
+
+    async function createItem(type, title, contentText, wx, wy, drawDataUrl=""){
+      title = (title||"").trim();
+      contentText = (contentText||"").trim();
+      if (!title && !contentText && !drawDataUrl){ toast("Boş içerik kaydedilmez"); return false; }
+
+      const payload = {
+        title: title || (type==="library"?"Yeni Kütüphane": type==="report"?"Rapor":"Yeni Not"),
+        content: type==="report" ? contentText : packContent(contentText, drawDataUrl),
+        x: Math.round(wx),
+        y: Math.round(wy),
+        type,
+        user_id
+      };
+
+      const { data, error } = await supabase.from(TABLE).insert(payload).select("id,title,content,x,y,type,user_id").single();
+      if (error){
+        console.error(error);
+        toast("Kaydedilemedi (RLS/izin)");
+        return false;
+      }
+      upsertRow(data);
+      return true;
+    }
+
+    async function deleteItem(id){
+      if (!isAdmin){ toast("Admin değilsin"); return; }
+      const { error } = await supabase.from(TABLE).delete().eq("id", id);
+      if (error){ console.error(error); toast("Silinemedi (RLS/izin)"); return; }
+      removeRow(id);
+      toast("Silindi");
+      rebuildReportsList();
+    }
+
+    function subscribeRealtime(){
+      const channel = supabase.channel("ln-items")
+        .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload)=>{
+          const e = payload.eventType;
+          if (e === "INSERT" || e === "UPDATE") upsertRow(payload.new);
+          else if (e === "DELETE") removeRow(payload.old?.id);
+          if (e === "INSERT" || e === "DELETE") rebuildReportsList();
+        })
+        .subscribe();
+      return channel;
+    }
+
+    // ====== Reports list UI ======
+    function rebuildReportsList(){
+      if (!isAdmin) return;
+      const reps = [];
+      for (const r of items.values()) if (r.type === "report") reps.push(r);
+      reps.sort((a,b)=> (b.id||0)-(a.id||0));
+      reportsList.innerHTML = "";
+
+      if (!reps.length){
+        reportsList.innerHTML = `<div class="chip"><span>✅</span><span>Rapor yok</span></div>`;
+        return;
+      }
+
+      for (const r of reps){
+        const info = unpackReport(r.content);
+        const targetId = info.targetId;
+        const reason = String(info.reason||"").slice(0,600);
+        const by = String(info.by||"");
+        const row = document.createElement("div");
+        row.className = "item report";
+        row.style.position = "relative";
+        row.style.left = "0";
+        row.style.top = "0";
+        row.innerHTML = `
+          <div class="head">
+            <div class="badge">🚩</div>
+            <div style="min-width:0">
+              <div class="title">Rapor • Hedef #${String(targetId||"?").slice(0,6)}</div>
+              <div class="meta">Gönderen: ${by ? by.slice(0,10)+"…" : "?"}</div>
             </div>
-        </div>
-    </div>
-
-    <script>
-        const SUPABASE_URL = 'https://ssfgvjudifodfhovhpzx.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzZmd2anVkaWZvZGZob3ZocHp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY0NDAxNzYsImV4cCI6MjA1MjAxNjE3Nn0.sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        let userId = localStorage.getItem('userId') || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem('userId', userId);
-
-        let librariesRemaining = parseInt(localStorage.getItem('librariesRemaining')) || 3;
-        let isAdmin = false;
-
-        let mapX = -4500;
-        let mapY = -4500;
-        let isDragging = false;
-        let startX, startY;
-        let currentColor = 'black';
-        let isDrawing = false;
-
-        const mapContainer = document.getElementById('mapContainer');
-        const map = document.getElementById('map');
-        const coordinates = document.getElementById('coordinates');
-
-        function updateLibraryCounter() {
-            document.getElementById('libraryCount').textContent = librariesRemaining;
-            document.getElementById('libraryCountBottom').textContent = librariesRemaining;
-            document.getElementById('addLibraryBtn').disabled = librariesRemaining <= 0;
-            localStorage.setItem('librariesRemaining', librariesRemaining);
-        }
-
-        updateLibraryCounter();
-
-        function updateMapPosition() {
-            map.style.transform = `translate(${mapX}px, ${mapY}px)`;
-            const centerX = Math.round(-mapX + window.innerWidth / 2);
-            const centerY = Math.round(-mapY + (window.innerHeight - 70) / 2);
-            coordinates.textContent = `X: ${centerX}, Y: ${centerY}`;
-        }
-
-        mapContainer.addEventListener('mousedown', e => {
-            if (e.target === mapContainer || e.target === map) {
-                isDragging = true;
-                startX = e.clientX - mapX;
-                startY = e.clientY - mapY;
-                mapContainer.classList.add('grabbing');
-            }
+          </div>
+          <div class="body">${reason || "(Sebep yok)"}</div>
+          <div class="foot">
+            <div class="small">Rapor ID: #${String(r.id).slice(0,6)}</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn" data-act="jump">Haritada Aç</button>
+              <button class="btn warn" data-act="resolve">Kapat (Sil)</button>
+            </div>
+          </div>
+        `;
+        row.querySelector('[data-act="jump"]').addEventListener("click", ()=>{
+          // find target item and center camera
+          const t = items.get(targetId);
+          if (!t){ toast("Hedef bulunamadı"); return; }
+          centerOn(Number(t.x)||0, Number(t.y)||0);
+          toast("Hedefe gidildi");
         });
+        row.querySelector('[data-act="resolve"]').addEventListener("click", ()=> deleteItem(r.id));
+        reportsList.appendChild(row);
+      }
+    }
 
-        document.addEventListener('mousemove', e => {
-            if (isDragging) {
-                mapX = e.clientX - startX;
-                mapY = e.clientY - startY;
-                updateMapPosition();
-            }
-        });
+    // ====== Interactions ======
+    function onPointerMove(e){
+      const p = ("touches" in e) ? e.touches[0] : e;
+      mouse.x = p.clientX; mouse.y = p.clientY;
+      const w = worldFromClient(mouse.x, mouse.y);
+      mouse.wx = w.x; mouse.wy = w.y;
+      updateCoords();
+    }
 
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-            mapContainer.classList.remove('grabbing');
-        });
+    boardWrap.addEventListener("mousedown", (e)=>{
+      if (e.button !== 0) return;
+      dragging = true;
+      dragStart = {x:e.clientX,y:e.clientY,cx:camX,cy:camY};
+      hideMenu();
+    });
+    window.addEventListener("mousemove", (e)=>{
+      onPointerMove(e);
+      if (!dragging) return;
+      camX = dragStart.cx + (e.clientX - dragStart.x);
+      camY = dragStart.cy + (e.clientY - dragStart.y);
+      applyTransform();
+    }, {passive:true});
+    window.addEventListener("mouseup", ()=>{ dragging = false; });
 
-        updateMapPosition();
+    let longPressT = null;
+    let touchDragging = false;
+    let touchStart = null;
 
-        function openModal(modalId) {
-            document.getElementById(modalId).classList.add('active');
-        }
+    boardWrap.addEventListener("touchstart", (e)=>{
+      if (!e.touches?.length) return;
+      const t = e.touches[0];
+      touchDragging = true;
+      touchStart = {x:t.clientX,y:t.clientY,cx:camX,cy:camY, moved:false};
+      hideMenu();
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('active');
-        }
+      clearTimeout(longPressT);
+      longPressT = setTimeout(()=>{
+        if (!touchStart || touchStart.moved) return;
+        const w = worldFromClient(touchStart.x, touchStart.y);
+        showMenuAt(touchStart.x, touchStart.y, w.x, w.y);
+      }, 520);
+    }, {passive:true});
 
-        document.getElementById('addNoteBtn').addEventListener('click', () => openModal('noteModal'));
-        document.getElementById('addDrawingBtn').addEventListener('click', () => {
-            openModal('drawingModal');
-            initDrawingCanvas();
-        });
-        document.getElementById('addLibraryBtn').addEventListener('click', () => {
-            if (librariesRemaining > 0) {
-                openModal('libraryModal');
-            }
-        });
-        document.getElementById('adminBtn').addEventListener('click', () => {
-            if (isAdmin) {
-                loadReportedItems();
-            } else {
-                openModal('adminLoginModal');
-            }
-        });
+    boardWrap.addEventListener("touchmove", (e)=>{
+      onPointerMove(e);
+      if (!touchDragging || !touchStart) return;
+      const t = e.touches[0];
+      const dx = t.clientX - touchStart.x;
+      const dy = t.clientY - touchStart.y;
+      if (Math.hypot(dx,dy) > 6) touchStart.moved = true;
+      camX = touchStart.cx + dx;
+      camY = touchStart.cy + dy;
+      applyTransform();
+    }, {passive:true});
 
-        const canvas = document.getElementById('drawingCanvas');
-        const ctx = canvas.getContext('2d');
+    boardWrap.addEventListener("touchend", ()=>{
+      touchDragging = false;
+      touchStart = null;
+      clearTimeout(longPressT);
+    });
 
-        function initDrawingCanvas() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = currentColor;
-            ctx.lineWidth = 3;
-            ctx.lineCap = 'round';
+    boardWrap.addEventListener("contextmenu", (e)=>{
+      e.preventDefault();
+      const w = worldFromClient(e.clientX, e.clientY);
+      showMenuAt(e.clientX, e.clientY, w.x, w.y);
+    });
 
-            document.querySelectorAll('.color-btn').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    currentColor = this.getAttribute('data-color');
-                    ctx.strokeStyle = currentColor;
-                });
-            });
-        }
+    window.addEventListener("mousemove", onPointerMove, {passive:true});
+    window.addEventListener("touchmove", onPointerMove, {passive:true});
 
-        canvas.addEventListener('mousedown', e => {
-            isDrawing = true;
-            const rect = canvas.getBoundingClientRect();
-            ctx.beginPath();
-            ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
-        });
+    window.addEventListener("mousedown", (e)=>{
+      if (menu.style.display === "block" && !menu.contains(e.target)) hideMenu();
+    });
+    window.addEventListener("blur", hideMenu);
+    window.addEventListener("resize", ()=>{ hideMenu(); resizeSketchForHiDPI(); });
 
-        canvas.addEventListener('mousemove', e => {
-            if (isDrawing) {
-                const rect = canvas.getBoundingClientRect();
-                ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-                ctx.stroke();
-            }
-        });
+    addNoteBtn.addEventListener("click", ()=> openCreateModal("note"));
+    addLibBtn.addEventListener("click", ()=>{
+      if (libraryCredits<=0){ toast("Kütüphane hakkın kalmadı"); return; }
+      openCreateModal("library");
+    });
 
-        canvas.addEventListener('mouseup', () => isDrawing = false);
-        canvas.addEventListener('mouseleave', () => isDrawing = false);
+    closeModal.addEventListener("click", closeCreateModal);
+    cancelBtn.addEventListener("click", closeCreateModal);
+    modalOverlay.addEventListener("mousedown", (e)=>{ if (e.target === modalOverlay) closeCreateModal(); });
 
-        function clearCanvas() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
+    async function doSave(){
+      const type = pendingType;
+      if (type === "library" && libraryCredits<=0){ toast("Kütüphane hakkın yok"); return; }
 
-        async function checkBanStatus() {
-            const { data } = await supabase
-                .from('site_users')
-                .select('banned_until')
-                .eq('user_id', userId)
-                .single();
+      const reserved = (type === "library");
+      if (reserved) setCredits(libraryCredits - 1);
 
-            if (data && data.banned_until) {
-                const bannedUntil = new Date(data.banned_until);
-                if (bannedUntil > new Date()) {
-                    alert('Hesabınız geçici olarak engellenmiştir.');
-                    return true;
-                }
-            }
-            return false;
-        }
+      saveBtn.disabled = true;
+      const draw = (drawMode.value === "on") ? exportSketch() : "";
+      const ok = await createItem(type, inputT.value, inputC.value, ctxWorld.x, ctxWorld.y, draw);
+      saveBtn.disabled = false;
 
-        async function saveNote() {
-            if (await checkBanStatus()) return;
+      if (!ok && reserved) setCredits(libraryCredits + 1);
+      if (ok){ closeCreateModal(); toast(type === "library" ? "Kütüphane eklendi" : "Not eklendi"); }
+    }
 
-            const title = document.getElementById('noteTitle').value;
-            const content = document.getElementById('noteContent').value;
+    saveBtn.addEventListener("click", doSave);
+    inputC.addEventListener("keydown", (e)=>{ if ((e.ctrlKey||e.metaKey) && e.key === "Enter") doSave(); });
 
-            if (!title || !content) {
-                alert('Lütfen başlık ve içerik girin!');
-                return;
-            }
+    // Report modal events
+    closeReport.addEventListener("click", closeReportModal);
+    reportCancel.addEventListener("click", closeReportModal);
+    reportOverlay.addEventListener("mousedown", (e)=>{ if (e.target === reportOverlay) closeReportModal(); });
 
-            const centerX = Math.round(-mapX + window.innerWidth / 2);
-            const centerY = Math.round(-mapY + (window.innerHeight - 70) / 2);
+    async function sendReport(){
+      if (!pendingReportTarget) return;
+      const r = (reason.value||"").trim();
+      if (!r){ toast("Sebep yaz"); return; }
+      const target = pendingReportTarget;
+      const payload = packReport(target.id, r, user_id);
+      reportSend.disabled = true;
+      const ok = await createItem("report", `REPORT:${target.id}`, payload, Number(target.x)||0, Number(target.y)||0, "");
+      reportSend.disabled = false;
+      if (ok){ toast("Rapor gönderildi"); closeReportModal(); }
+    }
+    reportSend.addEventListener("click", sendReport);
+    reason.addEventListener("keydown", (e)=>{ if ((e.ctrlKey||e.metaKey) && e.key === "Enter") sendReport(); });
 
-            const { error } = await supabase.from('items').insert({
-                title,
-                content,
-                x: centerX,
-                y: centerY,
-                type: 'note',
-                user_id: userId,
-                is_reported: false
-            });
+    // Admin
+    gear.addEventListener("click", openAdmin);
+    closeAdmin.addEventListener("click", closeAdminModal);
+    adminCancel.addEventListener("click", closeAdminModal);
+    adminOverlay.addEventListener("mousedown", (e)=>{ if (e.target === adminOverlay) closeAdminModal(); });
 
-            if (error) {
-                console.error('Hata:', error);
-                alert('Not kaydedilemedi!');
-            } else {
-                document.getElementById('noteTitle').value = '';
-                document.getElementById('noteContent').value = '';
-                closeModal('noteModal');
-                loadItems();
-            }
-        }
+    function tryAdmin(){
+      if (pw.value === "Hasan0245"){
+        setAdmin(true);
+        toast("Admin mod aktif");
+      } else {
+        setAdmin(false);
+        toast("Şifre yanlış");
+      }
+    }
+    adminOk.addEventListener("click", tryAdmin);
+    pw.addEventListener("keydown", (e)=>{ if (e.key === "Enter") tryAdmin(); });
 
-        async function saveDrawing() {
-            if (await checkBanStatus()) return;
+    adminLogout.addEventListener("click", ()=>{ setAdmin(false); toast("Çıkış"); });
+    toggleReporting.addEventListener("change", ()=> setReporting(toggleReporting.value === "on"));
+    toggleShowReports.addEventListener("change", ()=> setShowReports(toggleShowReports.value === "on"));
+    openReports.addEventListener("click", openReportsModal);
+    reloadBtn.addEventListener("click", loadItems);
 
-            const title = document.getElementById('drawingTitle').value;
-            const drawingData = canvas.toDataURL();
+    closeReports.addEventListener("click", closeReportsModal);
+    reportsClose.addEventListener("click", closeReportsModal);
+    reportsOverlay.addEventListener("mousedown", (e)=>{ if (e.target === reportsOverlay) closeReportsModal(); });
 
-            if (!title) {
-                alert('Lütfen başlık girin!');
-                return;
-            }
+    // Shortcuts
+    window.addEventListener("keydown", (e)=>{
+      if (e.key === "Escape"){
+        hideMenu();
+        closeCreateModal();
+        closeAdminModal();
+        closeReportModal();
+        closeReportsModal();
+      }
+    });
 
-            const centerX = Math.round(-mapX + window.innerWidth / 2);
-            const centerY = Math.round(-mapY + (window.innerHeight - 70) / 2);
+    // Camera helpers
+    function center(){
+      const r = boardWrap.getBoundingClientRect();
+      camX = Math.round(r.width/2);
+      camY = Math.round(r.height/2);
+      applyTransform();
+    }
+    function centerOn(wx, wy){
+      const r = boardWrap.getBoundingClientRect();
+      camX = Math.round(r.width/2 - wx);
+      camY = Math.round(r.height/2 - wy);
+      applyTransform();
+    }
 
-            const { error } = await supabase.from('items').insert({
-                title,
-                content: drawingData,
-                x: centerX,
-                y: centerY,
-                type: 'drawing',
-                user_id: userId,
-                is_reported: false
-            });
+    // Boot
+    center();
+    resizeSketchForHiDPI();
+    await loadItems();
+    subscribeRealtime();
+    rebuildReportsList();
 
-            if (error) {
-                console.error('Hata:', error);
-                alert('Çizim kaydedilemedi!');
-            } else {
-                document.getElementById('drawingTitle').value = '';
-                clearCanvas();
-                closeModal('drawingModal');
-                loadItems();
-            }
-        }
+    // Small hint if db blocked
+    setTimeout(()=>{
+      if (!items.size) console.log("0 item: tablo boş veya RLS izin yok.");
+    }, 900);
 
-        async function saveLibrary() {
-            if (await checkBanStatus()) return;
-
-            if (librariesRemaining <= 0) {
-                alert('Kütüphane ekleme hakkınız kalmadı!');
-                return;
-            }
-
-            const title = document.getElementById('libraryTitle').value;
-            const content = document.getElementById('libraryContent').value;
-
-            if (!title || !content) {
-                alert('Lütfen başlık ve açıklama girin!');
-                return;
-            }
-
-            const centerX = Math.round(-mapX + window.innerWidth / 2);
-            const centerY = Math.round(-mapY + (window.innerHeight - 70) / 2);
-
-            const { error } = await supabase.from('items').insert({
-                title,
-                content,
-                x: centerX,
-                y: centerY,
-                type: 'library',
-                user_id: userId,
-                is_reported: false
-            });
-
-            if (error) {
-                console.error('Hata:', error);
-                alert('Kütüphane kaydedilemedi!');
-            } else {
-                librariesRemaining--;
-                updateLibraryCounter();
-                document.getElementById('libraryTitle').value = '';
-                document.getElementById('libraryContent').value = '';
-                closeModal('libraryModal');
-                loadItems();
-            }
-        }
-
-        async function loadItems() {
-            const { data, error } = await supabase
-                .from('items')
-                .select('*')
-                .eq('is_reported', false);
-
-            if (error) {
-                console.error('Hata:', error);
-                return;
-            }
-
-            map.innerHTML = '';
-
-            data.forEach(item => {
-                const div = document.createElement('div');
-                div.className = item.type === 'library' ? 'library' : (item.type === 'drawing' ? 'note drawing-note' : 'note');
-                div.style.left = `${item.x}px`;
-                div.style.top = `${item.y}px`;
-
-                if (item.type === 'library') {
-                    div.innerHTML = `
-                        <div class="library-title">${item.title}</div>
-                        <div class="library-content">${item.content}</div>
-                        <button class="report-btn" onclick="reportItem(${item.id})">Rapor Et</button>
-                    `;
-                } else if (item.type === 'drawing') {
-                    const img = new Image();
-                    img.src = item.content;
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = 300;
-                    tempCanvas.height = 225;
-                    const tempCtx = tempCanvas.getContext('2d');
-                    img.onload = () => {
-                        tempCtx.drawImage(img, 0, 0, 300, 225);
-                    };
-                    div.innerHTML = `
-                        <div class="note-title">${item.title}</div>
-                        <button class="report-btn" onclick="reportItem(${item.id})">Rapor Et</button>
-                    `;
-                    div.appendChild(tempCanvas);
-                } else {
-                    div.innerHTML = `
-                        <div class="note-title">${item.title}</div>
-                        <div class="note-content">${item.content}</div>
-                        <button class="report-btn" onclick="reportItem(${item.id})">Rapor Et</button>
-                    `;
-                }
-
-                map.appendChild(div);
-            });
-        }
-
-        async function reportItem(itemId) {
-            const { error } = await supabase
-                .from('items')
-                .update({ is_reported: true })
-                .eq('id', itemId);
-
-            if (error) {
-                console.error('Hata:', error);
-                alert('Rapor gönderilemedi!');
-            } else {
-                alert('İçerik rapor edildi!');
-                loadItems();
-            }
-        }
-
-        function checkAdminPassword() {
-            const password = document.getElementById('adminPassword').value;
-            if (password === 'Hasan0245') {
-                isAdmin = true;
-                closeModal('adminLoginModal');
-                loadReportedItems();
-            } else {
-                alert('Hatalı şifre!');
-            }
-        }
-
-        async function loadReportedItems() {
-            const { data, error } = await supabase
-                .from('items')
-                .select('*')
-                .eq('is_reported', true);
-
-            if (error) {
-                console.error('Hata:', error);
-                return;
-            }
-
-            const panel = document.getElementById('adminPanel');
-            panel.innerHTML = '';
-
-            if (data.length === 0) {
-                panel.innerHTML = '<p>Rapor edilen içerik yok.</p>';
-            } else {
-                data.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'reported-item';
-                    div.innerHTML = `
-                        <h4>${item.title}</h4>
-                        <p><strong>Tip:</strong> ${item.type}</p>
-                        <p><strong>Kullanıcı ID:</strong> ${item.user_id}</p>
-                        <button class="ban-btn" onclick="banUser('${item.user_id}')">Kullanıcıyı Banla ve İçerikleri Sil</button>
-                    `;
-                    panel.appendChild(div);
-                });
-            }
-
-            openModal('adminPanelModal');
-        }
-
-        async function banUser(targetUserId) {
-            if (!confirm('Bu kullanıcının tüm içerikleri silinecek ve 5 dakika banlanacak. Emin misiniz?')) {
-                return;
-            }
-
-            const bannedUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-
-            await supabase
-                .from('site_users')
-                .upsert({ user_id: targetUserId, banned_until: bannedUntil });
-
-            await supabase
-                .from('items')
-                .delete()
-                .eq('user_id', targetUserId);
-
-            alert('Kullanıcı banlandı ve içerikleri silindi!');
-            loadReportedItems();
-            loadItems();
-        }
-
-        loadItems();
-        setInterval(loadItems, 10000);
+  </script>
+</body>
+</html>
