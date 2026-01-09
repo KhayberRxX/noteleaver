@@ -1,1057 +1,264 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Leave a Note</title>
-  <style>
-    :root{
-      --bg:#0b0d10; --panel:#10141a; --panel2:#0f1318; --text:#e7eef8; --muted:#93a4b7;
-      --accent:#7c5cff; --danger:#ff4d4d; --note:#1a2230; --stroke:#223044; --lib:#1c2a20; --libStroke:#2bff6a;
-      --warn:#ffcc66; --ok:#66ffa6;
-      --shadow: 0 14px 40px rgba(0,0,0,.55);
-      --r:14px;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;overflow:hidden}
-    a{color:inherit}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leave a Note</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%2300ff88%22/><text y=%22.9em%22 font-size=%2260%22 x=%225%22 font-family=%22sans-serif%22 font-weight=%22bold%22 fill=%22black%22>LN</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    <style>
+        :root { --bg: #050505; --panel: #111111; --accent: #00ff88; --text: #f0f0f0; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; }
+        
+        /* Devasa Sürüklenebilir Harita */
+        #viewport { width: 100vw; height: 100vh; position: relative; cursor: grab; overflow: hidden; }
+        #viewport:active { cursor: grabbing; }
+        #map { width: 30000px; height: 30000px; position: absolute; top: -15000px; left: -15000px; background-image: radial-gradient(#222 1.5px, transparent 1.5px); background-size: 80px 80px; }
 
-    #topbar{position:fixed;inset:12px 12px auto 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:50;pointer-events:none}
-    .brand{display:flex;align-items:center;gap:10px;pointer-events:auto}
-    .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(145deg,rgba(124,92,255,.25),rgba(124,92,255,.05));border:1px solid rgba(124,92,255,.35);box-shadow:var(--shadow);display:grid;place-items:center}
-    .logo svg{display:block}
-    .brand h1{margin:0;font-size:15px;letter-spacing:.2px}
-    .brand .sub{color:var(--muted);font-size:12px;margin-top:1px}
+        /* Arayüz */
+        #ui { position: fixed; top: 20px; left: 20px; z-index: 1000; display: flex; gap: 10px; pointer-events: none; }
+        .ui-box { background: rgba(15,15,15,0.9); padding: 10px 20px; border-radius: 40px; border: 1px solid #333; pointer-events: all; display: flex; align-items: center; gap: 10px; font-weight: bold; border-left: 4px solid var(--accent); }
+        #coords { position: fixed; bottom: 20px; right: 20px; font-size: 11px; color: #555; pointer-events: none; letter-spacing: 1px; }
 
-    .actions{display:flex;align-items:center;gap:10px;pointer-events:auto}
-    .chip{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(16,20,26,.7);backdrop-filter: blur(10px);box-shadow: 0 10px 30px rgba(0,0,0,.35)}
-    .chip b{font-weight:650}
-    .btnIcon{width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:rgba(16,20,26,.7);backdrop-filter: blur(10px);display:grid;place-items:center;cursor:pointer;user-select:none;box-shadow: 0 10px 30px rgba(0,0,0,.35)}
-    .btnIcon:hover{border-color:rgba(255,255,255,.18)}
-    .btnIcon:active{transform:translateY(1px)}
+        /* Notlar ve Çizimler */
+        .item { position: absolute; padding: 15px; background: rgba(20,20,20,0.95); border: 1px solid #333; border-radius: 12px; min-width: 180px; max-width: 300px; pointer-events: all; box-shadow: 0 15px 35px rgba(0,0,0,0.5); }
+        .item.library { border: 2px solid var(--accent); min-width: 280px; }
+        .item h4 { margin: 0 0 10px 0; color: var(--accent); font-size: 16px; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        .item img { max-width: 100%; border-radius: 5px; margin: 5px 0; }
+        .item-tools { display: flex; gap: 5px; margin-top: 10px; }
+        .report-btn { background: none; border: 1px solid #444; color: #666; font-size: 10px; padding: 3px 8px; border-radius: 4px; cursor: pointer; }
+        .report-btn:hover { border-color: #ff4444; color: #ff4444; }
+        .admin-del-btn { display: none; background: #ff4444; color: white; border: none; padding: 5px; border-radius: 5px; cursor: pointer; width: 100%; font-weight: bold; }
 
-    #boardWrap{position:fixed;inset:0;overflow:hidden;}
-    #board{position:absolute;left:0;top:0;transform:translate3d(0,0,0);will-change:transform}
+        /* Admin Paneli Listesi */
+        #admin-reports { position: fixed; right: 20px; top: 80px; width: 250px; background: rgba(15,15,15,0.95); border: 1px solid var(--accent); border-radius: 15px; padding: 15px; z-index: 2000; display: none; }
+        .report-item { font-size: 12px; border-bottom: 1px solid #222; padding: 8px 0; display: flex; justify-content: space-between; align-items: center; }
 
-    #grid{position:fixed;inset:-2000px;pointer-events:none;opacity:.55;mix-blend-mode:screen}
-    #grid::before{
-      content:"";position:absolute;inset:0;
-      background:
-        radial-gradient(circle at 1px 1px, rgba(255,255,255,.06) 1px, transparent 0) 0 0/44px 44px,
-        radial-gradient(circle at 1px 1px, rgba(124,92,255,.10) 1px, transparent 0) 0 0/220px 220px;
-    }
+        /* Modallar */
+        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); padding: 30px; border-radius: 20px; z-index: 3000; border: 1px solid var(--accent); width: 380px; display: none; box-shadow: 0 0 50px rgba(0,255,136,0.1); }
+        input, textarea { width: 100%; background: #000; color: white; border: 1px solid #333; padding: 12px; margin: 8px 0; border-radius: 8px; box-sizing: border-box; }
+        .btn-green { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: black; font-size: 14px; }
+        
+        /* Çizim Tuvali */
+        #canvas-area { background: #000; border: 1px dashed #444; margin: 10px 0; touch-action: none; cursor: crosshair; }
 
-    .item{position:absolute;min-width:220px;max-width:340px;border-radius:var(--r);border:1px solid rgba(255,255,255,.08);
-      background:linear-gradient(180deg, rgba(26,34,48,.92), rgba(16,20,26,.90));
-      box-shadow: 0 14px 35px rgba(0,0,0,.55);
-      overflow:hidden;
-    }
-    .item.library{
-      min-width:340px;max-width:460px;
-      border:1px solid rgba(43,255,106,.45);
-      box-shadow: 0 18px 48px rgba(0,0,0,.6);
-      background:linear-gradient(180deg, rgba(28,42,32,.92), rgba(16,20,26,.90));
-    }
-    .item.report{
-      min-width:280px;max-width:420px;
-      border:1px solid rgba(255,204,102,.35);
-      background:linear-gradient(180deg, rgba(40,34,20,.92), rgba(16,20,26,.90));
-    }
-    .item .head{padding:10px 12px 6px 12px;display:flex;align-items:flex-start;gap:10px}
-    .badge{width:26px;height:26px;border-radius:10px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.05);flex:0 0 auto}
-    .library .badge{border-color:rgba(43,255,106,.35);background:rgba(43,255,106,.08)}
-    .report .badge{border-color:rgba(255,204,102,.35);background:rgba(255,204,102,.10)}
-    .title{font-weight:700;letter-spacing:.2px;word-break:break-word}
-    .meta{color:var(--muted);font-size:11px;margin-top:2px}
-    .item .body{padding:0 12px 12px 12px;color:#d7e2f0;white-space:pre-wrap;word-break:break-word}
-    .drawWrap{padding:0 12px 12px}
-    .drawImg{width:100%;max-height:220px;object-fit:contain;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.25)}
-    .item .foot{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);background:rgba(15,19,24,.55)}
-    .small{font-size:11px;color:var(--muted)}
-    .dangerBtn{display:none;gap:8px;align-items:center;border:none;border-radius:12px;padding:8px 10px;background:rgba(255,77,77,.14);
-      color:#ffd7d7;border:1px solid rgba(255,77,77,.28);cursor:pointer}
-    .dangerBtn:hover{background:rgba(255,77,77,.18)}
-    .dangerBtn:active{transform:translateY(1px)}
-
-    .ghostBtn{gap:8px;align-items:center;border:none;border-radius:12px;padding:8px 10px;background:rgba(255,255,255,.06);
-      color:var(--text);border:1px solid rgba(255,255,255,.10);cursor:pointer;display:inline-flex}
-    .ghostBtn:hover{background:rgba(255,255,255,.08)}
-    .ghostBtn:active{transform:translateY(1px)}
-
-    #menu{position:fixed;z-index:80;display:none;min-width:240px;max-width:300px;border-radius:16px;background:rgba(16,20,26,.86);
-      border:1px solid rgba(255,255,255,.10);box-shadow:var(--shadow);backdrop-filter: blur(12px);overflow:hidden}
-    #menu .mhead{padding:12px 12px 10px;border-bottom:1px solid rgba(255,255,255,.08)}
-    #menu .mhead b{display:block}
-    #menu .mhead span{color:var(--muted);font-size:12px}
-    #menu button{width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:space-between}
-    #menu button:hover{background:rgba(255,255,255,.06)}
-    #menu button small{color:var(--muted)}
-
-    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:120}
-    .modal{width:min(560px, calc(100% - 24px));border-radius:18px;background:rgba(16,20,26,.9);border:1px solid rgba(255,255,255,.10);box-shadow:var(--shadow);backdrop-filter: blur(12px)}
-    .modal header{padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between}
-    .modal header b{font-size:13px;letter-spacing:.2px}
-    .modal .content{padding:14px}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
-    .field{flex:1 1 220px;display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
-    input,textarea,select{width:100%;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(10,12,15,.7);color:var(--text);padding:10px 12px;outline:none}
-    textarea{min-height:110px;resize:vertical}
-    input:focus,textarea:focus,select:focus{border-color:rgba(124,92,255,.45)}
-    .modal .actions{padding:12px 14px 14px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
-    .btn{border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:var(--text);padding:10px 12px;cursor:pointer}
-    .btn:hover{background:rgba(255,255,255,.08)}
-    .btn.primary{border-color:rgba(124,92,255,.35);background:rgba(124,92,255,.16)}
-    .btn.primary:hover{background:rgba(124,92,255,.20)}
-    .btn.warn{border-color:rgba(255,204,102,.35);background:rgba(255,204,102,.12)}
-    .btn.warn:hover{background:rgba(255,204,102,.16)}
-    .btn:active{transform:translateY(1px)}
-
-    /* drawing */
-    .drawBar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 10px}
-    .drawBar .chip{box-shadow:none}
-    canvas#sketch{width:100%;height:220px;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.25);touch-action:none}
-
-    #coords{position:fixed;right:12px;bottom:12px;z-index:60;pointer-events:none}
-    #coords .chip{pointer-events:none}
-
-    #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:200;display:none}
-    #toast .chip{border-color:rgba(255,255,255,.10)}
-
-    @media (max-width:720px){
-      .brand h1{font-size:14px}
-      .item{min-width:200px}
-      .item.library{min-width:280px}
-    }
-  </style>
+        #ctx-menu { position: absolute; background: var(--panel); border: 1px solid #333; border-radius: 10px; display: none; flex-direction: column; padding: 8px; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+        #ctx-menu button { background: none; border: none; color: white; padding: 12px 20px; text-align: left; cursor: pointer; border-radius: 5px; font-weight: 500; }
+        #ctx-menu button:hover { background: var(--accent); color: black; }
+    </style>
 </head>
 <body>
-  <div id="topbar">
-    <div class="brand">
-      <div class="logo" aria-hidden="true">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-          <path d="M7 6v12h3" stroke="rgba(231,238,248,.95)" stroke-width="2" stroke-linecap="round"/>
-          <path d="M14 6v12" stroke="rgba(231,238,248,.95)" stroke-width="2" stroke-linecap="round"/>
-          <path d="M14 12c0-3 2-5 5-5" stroke="rgba(124,92,255,.9)" stroke-width="2" stroke-linecap="round"/>
-          <path d="M14 12c0 3 2 5 5 5" stroke="rgba(124,92,255,.9)" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div>
-        <h1>Leave a Note</h1>
-        <div class="sub">Sonsuz harita • Notlar &amp; Kütüphaneler</div>
-      </div>
+
+<div id="ui">
+    <div class="ui-box">🆔 <span id="my-id">...</span></div>
+    <div class="ui-box">📚 Kalan Hak: <span id="lib-count">3</span></div>
+    <div class="ui-box" style="cursor:pointer" id="admin-trigger" onclick="handleAdmin()">⚙️</div>
+</div>
+
+<div id="admin-reports">
+    <h3 style="margin:0; color:var(--accent); font-size:14px">🚩 Raporlananlar</h3>
+    <div id="report-list"></div>
+</div>
+
+<div id="viewport">
+    <div id="map"></div>
+</div>
+
+<div id="coords">X: 0 | Y: 0</div>
+
+<div id="ctx-menu">
+    <button onclick="showModal('note')">📝 Not Bırak</button>
+    <button onclick="showModal('draw')">🎨 Çizim Yap</button>
+    <button onclick="buyLibrary()">📚 Kütüphane Kur</button>
+</div>
+
+<div id="item-modal" class="modal">
+    <h3 id="modal-title" style="margin-top:0">Yeni İçerik</h3>
+    <input type="text" id="title-in" placeholder="Başlık Yazın...">
+    <div id="text-fields">
+        <textarea id="content-in" rows="4" placeholder="Mesajınız..."></textarea>
     </div>
-
-    <div class="actions">
-      <div class="chip" title="Kütüphane hakkı">
-        <span aria-hidden="true">📚</span>
-        <span>Kalan: <b id="credits">3</b></span>
-      </div>
-      <div class="chip" id="adminChip" style="display:none" title="Admin mod">
-        <span aria-hidden="true">🛡️</span>
-        <span><b>Admin</b></span>
-      </div>
-      <div class="btnIcon" id="gear" title="Admin">
-        <span aria-hidden="true">⚙️</span>
-      </div>
+    <div id="draw-fields" style="display:none">
+        <canvas id="canvas-area" width="320" height="200"></canvas>
+        <button onclick="clearCanvas()" style="background:none; border:none; color:red; font-size:11px; cursor:pointer">Temizle</button>
     </div>
-  </div>
+    <button class="btn-green" id="submit-btn" onclick="processSave()">YAYINLA</button>
+    <button onclick="closeModal()" style="background:none; border:none; color:gray; width:100%; margin-top:15px; cursor:pointer">İptal</button>
+</div>
 
-  <div id="boardWrap">
-    <div id="grid"></div>
-    <div id="board" aria-label="Sonsuz harita"></div>
-  </div>
+<script>
+    // --- KONFİGÜRASYON ---
+    const SURL = 'https://ssfgvjudifodfhovhpzx.supabase.co';
+    const SKEY = 'sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo';
+    const supabase = supabase.createClient(SURL, SKEY);
 
-  <div id="coords"><div class="chip"><span style="color:var(--muted)">X</span> <b id="cx">0</b> <span style="color:var(--muted)">Y</span> <b id="cy">0</b></div></div>
+    let isAdmin = false;
+    let isDragging = false;
+    let currentX, currentY, activeType;
+    let startX, startY;
+    let userId = localStorage.getItem('userId') || "U-" + Math.floor(Math.random()*9000);
+    localStorage.setItem('userId', userId);
+    document.getElementById('my-id').innerText = userId;
 
-  <div id="menu" role="menu" aria-hidden="true">
-    <div class="mhead"><b>Yeni içerik ekle</b><span id="menupos">(0, 0)</span></div>
-    <button id="addNote" role="menuitem"><span>📝 Not</span><small>Normal</small></button>
-    <button id="addLib" role="menuitem"><span>📚 Kütüphane</span><small>Yeşil çerçeve</small></button>
-  </div>
+    const map = document.getElementById('map');
+    const viewport = document.getElementById('viewport');
 
-  <!-- Create/Edit modal -->
-  <div class="overlay" id="modalOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <header>
-        <b id="modalTitle">Ekle</b>
-        <div class="btnIcon" id="closeModal" title="Kapat" style="width:34px;height:34px;border-radius:12px;box-shadow:none">✕</div>
-      </header>
-      <div class="content">
-        <div class="row">
-          <div class="field">
-            <label class="small" for="t">Başlık</label>
-            <input id="t" autocomplete="off" maxlength="80" placeholder="Başlık..." />
-          </div>
-          <div class="field" style="flex:0 1 160px">
-            <label class="small" for="drawMode">Çizim</label>
-            <select id="drawMode">
-              <option value="on">Açık</option>
-              <option value="off">Kapalı</option>
-            </select>
-          </div>
-        </div>
+    // --- HARİTA KONTROLLERİ ---
+    viewport.addEventListener('mousedown', (e) => {
+        if(e.target !== map) return;
+        isDragging = true;
+        startX = e.pageX - map.offsetLeft;
+        startY = e.pageY - map.offsetTop;
+    });
+    window.addEventListener('mouseup', () => isDragging = false);
+    window.addEventListener('mousemove', (e) => {
+        const rect = map.getBoundingClientRect();
+        const curX = Math.round(e.pageX - rect.left);
+        const curY = Math.round(e.pageY - rect.top);
+        document.getElementById('coords').innerText = `X: ${curX} | Y: ${curY}`;
 
-        <div class="field">
-          <label class="small" for="c">İçerik</label>
-          <textarea id="c" maxlength="4000" placeholder="İçerik..."></textarea>
-        </div>
+        if (!isDragging) return;
+        map.style.left = (e.pageX - startX) + 'px';
+        map.style.top = (e.pageY - startY) + 'px';
+    });
 
-        <div id="drawArea" style="display:block">
-          <div class="drawBar">
-            <div class="chip"><span>✏️</span> <b>Çiz</b></div>
-            <button class="btn" id="pen">Kalem</button>
-            <button class="btn" id="eraser">Silgi</button>
-            <button class="btn warn" id="clearDraw">Temizle</button>
-            <div class="chip"><span style="color:var(--muted)">Kalınlık</span> <b id="th">3</b></div>
-            <input id="thick" type="range" min="1" max="12" value="3" style="flex:1 1 160px" />
-          </div>
-          <canvas id="sketch" width="900" height="520" aria-label="Çizim alanı"></canvas>
-          <div class="small" style="margin-top:8px;color:var(--muted)">Not: Çizim, notla birlikte kaydedilir.</div>
-        </div>
+    // --- SAĞ TIK VE MENÜ ---
+    map.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const rect = map.getBoundingClientRect();
+        currentX = e.pageX - rect.left;
+        currentY = e.pageY - rect.top;
+        const menu = document.getElementById('ctx-menu');
+        menu.style.display = 'flex';
+        menu.style.left = e.pageX + 'px';
+        menu.style.top = e.pageY + 'px';
+    });
+    window.addEventListener('click', () => document.getElementById('ctx-menu').style.display = 'none');
 
-        <div class="small" id="hint" style="margin-top:10px">Sağ tık / uzun basış ile ekle menüsü açılır. Sürükleyerek haritayı kaydır.</div>
-      </div>
-      <div class="actions">
-        <button class="btn" id="cancel">Vazgeç</button>
-        <button class="btn primary" id="save">Kaydet</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Report modal -->
-  <div class="overlay" id="reportOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
-      <header>
-        <b id="reportTitle">Raporla</b>
-        <div class="btnIcon" id="closeReport" title="Kapat" style="width:34px;height:34px;border-radius:12px;box-shadow:none">✕</div>
-      </header>
-      <div class="content">
-        <div class="small" id="reportTarget" style="margin-bottom:10px;color:var(--muted)">—</div>
-        <div class="field">
-          <label class="small" for="reason">Sebep</label>
-          <textarea id="reason" maxlength="600" placeholder="Kısa açıklama..."></textarea>
-        </div>
-        <div class="small" style="color:var(--muted)">Rapor, admin panelinde görünür (admin isterse kapatabilir).</div>
-      </div>
-      <div class="actions">
-        <button class="btn" id="reportCancel">Vazgeç</button>
-        <button class="btn warn" id="reportSend">Rapor Gönder</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Admin modal -->
-  <div class="overlay" id="adminOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
-      <header>
-        <b id="adminTitle">Admin</b>
-        <div class="btnIcon" id="closeAdmin" title="Kapat" style="width:34px;height:34px;border-radius:12px;box-shadow:none">✕</div>
-      </header>
-      <div class="content">
-        <div id="adminLogin" style="display:block">
-          <div class="field">
-            <label class="small" for="pw">Şifre</label>
-            <input id="pw" type="password" autocomplete="current-password" placeholder="••••••••" />
-          </div>
-          <div class="small" id="adminState" style="margin-top:6px;color:var(--muted)">⚠️ Gizli admin sistemi</div>
-        </div>
-
-        <div id="adminTools" style="display:none">
-          <div class="row" style="align-items:center;justify-content:space-between">
-            <div class="chip"><span>🛠️</span> <b>Admin Araçları</b></div>
-            <button class="btn" id="adminLogout">Çıkış</button>
-          </div>
-          <div class="row" style="margin-top:12px">
-            <div class="field">
-              <label class="small">Rapor Sistemi</label>
-              <select id="toggleReporting">
-                <option value="on">Açık</option>
-                <option value="off">Kapalı</option>
-              </select>
-            </div>
-            <div class="field">
-              <label class="small">Raporları Haritada Göster</label>
-              <select id="toggleShowReports">
-                <option value="off">Kapalı</option>
-                <option value="on">Açık</option>
-              </select>
-            </div>
-          </div>
-          <div class="row">
-            <button class="btn warn" id="openReports">Raporlar Paneli</button>
-            <button class="btn" id="reload">Yenile</button>
-          </div>
-          <div class="small" style="margin-top:10px;color:var(--muted)">Not: Bu admin sistemi tarayıcı tarafında olduğu için “gerçek güvenlik” sağlamaz. Güvenli admin için server/edge function gerekir.</div>
-        </div>
-      </div>
-      <div class="actions" id="adminActions">
-        <button class="btn" id="adminCancel">Kapat</button>
-        <button class="btn primary" id="adminOk">Giriş</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Reports list modal -->
-  <div class="overlay" id="reportsOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reportsTitle">
-      <header>
-        <b id="reportsTitle">Raporlar</b>
-        <div class="btnIcon" id="closeReports" title="Kapat" style="width:34px;height:34px;border-radius:12px;box-shadow:none">✕</div>
-      </header>
-      <div class="content">
-        <div class="small" style="color:var(--muted);margin-bottom:10px">Raporlar, aynı <b>items</b> tablosunda <b>type=report</b> olarak saklanır.</div>
-        <div id="reportsList" style="display:flex;flex-direction:column;gap:10px"></div>
-      </div>
-      <div class="actions">
-        <button class="btn" id="reportsClose">Kapat</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="toast"><div class="chip" id="toastText">...</div></div>
-
-  <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-
-    // ====== Config ======
-    const SUPABASE_URL = "https://ssfgvjudifodfhovhpzx.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo";
-    const TABLE = "items";
-
-    // ====== Helpers ======
-    const $ = (s, r=document) => r.querySelector(s);
-    const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
-    const uid = () => (crypto.randomUUID ? crypto.randomUUID() : (Date.now()+"-"+Math.random().toString(16).slice(2)));
-    const fmt = (n)=> (Math.round(Number(n)||0)).toString();
-    const toast = (msg, ms=1600)=>{
-      const el = $("#toast"), t=$("#toastText");
-      t.textContent = msg;
-      el.style.display = "block";
-      clearTimeout(toast._t);
-      toast._t = setTimeout(()=> el.style.display="none", ms);
-    };
-
-    // Content packing: supports old plain text + new JSON {text, draw}
-    const packContent = (text, draw)=> JSON.stringify({ text: text||"", draw: draw||"" });
-    const unpackContent = (raw)=>{
-      if (raw && typeof raw === "string" && raw.trim().startsWith("{")){
-        try{
-          const o = JSON.parse(raw);
-          if (o && typeof o === "object") return { text: String(o.text||""), draw: String(o.draw||"") };
-        }catch{}
-      }
-      return { text: raw||"", draw: "" };
-    };
-
-    // Report payload stored in content JSON: { targetId, reason, by, ts }
-    const packReport = (targetId, reason, by)=> JSON.stringify({ targetId, reason, by, ts: Date.now() });
-    const unpackReport = (raw)=>{
-      try{ return JSON.parse(raw||"{}"); }catch{ return {}; }
-    };
-
-    // ====== State ======
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
-
-    const boardWrap = $("#boardWrap");
-    const board = $("#board");
-    const grid = $("#grid");
-
-    const menu = $("#menu");
-    const menupos = $("#menupos");
-    const addNoteBtn = $("#addNote");
-    const addLibBtn = $("#addLib");
-
-    const modalOverlay = $("#modalOverlay");
-    const closeModal = $("#closeModal");
-    const cancelBtn = $("#cancel");
-    const saveBtn = $("#save");
-    const modalTitle = $("#modalTitle");
-    const inputT = $("#t");
-    const inputC = $("#c");
-    const drawMode = $("#drawMode");
-    const drawArea = $("#drawArea");
-
-    const gear = $("#gear");
-    const adminOverlay = $("#adminOverlay");
-    const closeAdmin = $("#closeAdmin");
-    const adminCancel = $("#adminCancel");
-    const adminOk = $("#adminOk");
-    const pw = $("#pw");
-    const adminState = $("#adminState");
-    const adminLogin = $("#adminLogin");
-    const adminTools = $("#adminTools");
-    const adminActions = $("#adminActions");
-    const adminChip = $("#adminChip");
-
-    const toggleReporting = $("#toggleReporting");
-    const toggleShowReports = $("#toggleShowReports");
-    const openReports = $("#openReports");
-    const reloadBtn = $("#reload");
-    const adminLogout = $("#adminLogout");
-
-    const reportsOverlay = $("#reportsOverlay");
-    const closeReports = $("#closeReports");
-    const reportsClose = $("#reportsClose");
-    const reportsList = $("#reportsList");
-
-    const reportOverlay = $("#reportOverlay");
-    const closeReport = $("#closeReport");
-    const reportCancel = $("#reportCancel");
-    const reportSend = $("#reportSend");
-    const reportTarget = $("#reportTarget");
-    const reason = $("#reason");
-
-    const cx = $("#cx"), cy = $("#cy");
-    const creditsEl = $("#credits");
-
-    // drawing canvas
-    const sketch = $("#sketch");
-    const penBtn = $("#pen");
-    const eraserBtn = $("#eraser");
-    const clearDraw = $("#clearDraw");
-    const thick = $("#thick");
-    const th = $("#th");
-
-    const LS_USER = "ln_user_id";
-    const LS_CREDITS = "ln_library_credits";
-    const SS_ADMIN = "ln_admin";
-    const LS_REPORTING = "ln_reporting";
-    const LS_SHOW_REPORTS = "ln_show_reports";
-
-    const user_id = localStorage.getItem(LS_USER) || (localStorage.setItem(LS_USER, uid()), localStorage.getItem(LS_USER));
-    let libraryCredits = Number(localStorage.getItem(LS_CREDITS));
-    if (!Number.isFinite(libraryCredits)) libraryCredits = 3;
-    libraryCredits = clamp(libraryCredits, 0, 999);
-    localStorage.setItem(LS_CREDITS, String(libraryCredits));
-
-    let isAdmin = sessionStorage.getItem(SS_ADMIN) === "1";
-    let reportingEnabled = (localStorage.getItem(LS_REPORTING) ?? "on") === "on";
-    let showReports = (localStorage.getItem(LS_SHOW_REPORTS) ?? "off") === "on";
-
-    const items = new Map(); // id -> row
-
-    // Camera/pan
-    let camX = 0, camY = 0;
-    let dragging = false;
-    let dragStart = {x:0,y:0,cx:0,cy:0};
-    let mouse = {x:0,y:0, wx:0, wy:0};
-    let ctxWorld = {x:0,y:0};
-    let pendingType = "note";
-    let pendingReportTarget = null;
-
-    function setCredits(v){
-      libraryCredits = clamp(Number(v)||0,0,999);
-      localStorage.setItem(LS_CREDITS, String(libraryCredits));
-      creditsEl.textContent = String(libraryCredits);
-    }
-    setCredits(libraryCredits);
-
-    function setAdmin(on){
-      isAdmin = !!on;
-      sessionStorage.setItem(SS_ADMIN, on?"1":"0");
-      adminChip.style.display = on ? "flex" : "none";
-      adminState.textContent = on ? "✅ Admin mod aktif" : "⚠️ Gizli admin sistemi";
-      adminLogin.style.display = on ? "none" : "block";
-      adminTools.style.display = on ? "block" : "none";
-      adminActions.style.display = on ? "none" : "flex";
-      // sync tool selects
-      toggleReporting.value = reportingEnabled ? "on" : "off";
-      toggleShowReports.value = showReports ? "on" : "off";
-      renderAll();
-    }
-    setAdmin(isAdmin);
-
-    function setReporting(on){
-      reportingEnabled = !!on;
-      localStorage.setItem(LS_REPORTING, on?"on":"off");
-      toggleReporting.value = on?"on":"off";
-      renderAll();
-    }
-    function setShowReports(on){
-      showReports = !!on;
-      localStorage.setItem(LS_SHOW_REPORTS, on?"on":"off");
-      toggleShowReports.value = on?"on":"off";
-      renderAll();
-    }
-
-    function worldFromClient(clientX, clientY){
-      const r = boardWrap.getBoundingClientRect();
-      return { x: clientX - r.left - camX, y: clientY - r.top - camY };
-    }
-
-    function applyTransform(){
-      board.style.transform = `translate3d(${camX}px, ${camY}px, 0)`;
-      grid.style.transform = `translate3d(${camX}px, ${camY}px, 0)`;
-    }
-
-    function updateCoords(){
-      cx.textContent = fmt(mouse.wx);
-      cy.textContent = fmt(mouse.wy);
-    }
-
-    // ====== Menu & modals ======
-    function hideMenu(){ menu.style.display = "none"; menu.setAttribute("aria-hidden","true"); }
-    function showMenuAt(clientX, clientY, wx, wy){
-      ctxWorld = {x: wx, y: wy};
-      menupos.textContent = `(${fmt(wx)}, ${fmt(wy)})`;
-      const pad=10, mw=280, mh=150;
-      menu.style.display = "block";
-      menu.setAttribute("aria-hidden","false");
-      menu.style.left = clamp(clientX + 8, pad, window.innerWidth - mw - pad) + "px";
-      menu.style.top  = clamp(clientY + 8, pad, window.innerHeight - mh - pad) + "px";
-      addLibBtn.querySelector("small").textContent = libraryCredits>0 ? `Yeşil çerçeve • Kalan ${libraryCredits}` : "Hakkın yok";
-      addLibBtn.style.opacity = libraryCredits>0 ? "1" : ".45";
-    }
-
-    function openCreateModal(type){
-      pendingType = type;
-      hideMenu();
-      modalTitle.textContent = type === "library" ? "Kütüphane Ekle" : "Not Ekle";
-      inputT.value = "";
-      inputC.value = "";
-      drawMode.value = "on";
-      drawArea.style.display = "block";
-      clearSketch();
-      modalOverlay.style.display = "flex";
-      modalOverlay.setAttribute("aria-hidden","false");
-      setTimeout(()=> inputT.focus(), 0);
-    }
-    function closeCreateModal(){
-      modalOverlay.style.display = "none";
-      modalOverlay.setAttribute("aria-hidden","true");
-    }
-
-    function openAdmin(){
-      pw.value = "";
-      adminOverlay.style.display = "flex";
-      adminOverlay.setAttribute("aria-hidden","false");
-      setTimeout(()=> (isAdmin?null:pw.focus()), 0);
-    }
-    function closeAdminModal(){
-      adminOverlay.style.display = "none";
-      adminOverlay.setAttribute("aria-hidden","true");
-    }
-
-    function openReportModal(targetRow){
-      if (!reportingEnabled){ toast("Rapor sistemi kapalı"); return; }
-      pendingReportTarget = targetRow;
-      reason.value = "";
-      reportTarget.textContent = `Hedef: #${String(targetRow.id).slice(0,6)} • ${targetRow.type}`;
-      reportOverlay.style.display = "flex";
-      reportOverlay.setAttribute("aria-hidden","false");
-      setTimeout(()=> reason.focus(), 0);
-    }
-    function closeReportModal(){
-      reportOverlay.style.display = "none";
-      reportOverlay.setAttribute("aria-hidden","true");
-      pendingReportTarget = null;
-    }
-
-    function openReportsModal(){
-      if (!isAdmin){ toast("Admin değilsin"); return; }
-      rebuildReportsList();
-      reportsOverlay.style.display = "flex";
-      reportsOverlay.setAttribute("aria-hidden","false");
-    }
-    function closeReportsModal(){
-      reportsOverlay.style.display = "none";
-      reportsOverlay.setAttribute("aria-hidden","true");
-    }
-
-    // ====== Drawing ======
-    const dctx = sketch.getContext("2d", { alpha:true });
+    // --- ÇİZİM SİSTEMİ ---
+    const canvas = document.getElementById('canvas-area');
+    const ctx = canvas.getContext('2d');
     let drawing = false;
-    let mode = "pen";
-    let last = null;
-
-    function resizeSketchForHiDPI(){
-      const rect = sketch.getBoundingClientRect();
-      const dpr = Math.max(1, window.devicePixelRatio || 1);
-      const w = Math.round(rect.width * dpr);
-      const h = Math.round(rect.height * dpr);
-      if (sketch.width !== w || sketch.height !== h){
-        const prev = sketch.toDataURL("image/png");
-        sketch.width = w; sketch.height = h;
-        dctx.setTransform(1,0,0,1,0,0);
-        dctx.lineCap = "round";
-        dctx.lineJoin = "round";
-        // restore
-        const img = new Image();
-        img.onload = ()=>{ dctx.drawImage(img, 0,0, w,h); };
-        img.src = prev;
-      }
-    }
-
-    function clearSketch(){
-      dctx.clearRect(0,0,sketch.width,sketch.height);
-    }
-
-    function pointerPos(ev){
-      const r = sketch.getBoundingClientRect();
-      const p = ("touches" in ev) ? ev.touches[0] : ev;
-      const x = (p.clientX - r.left) * (sketch.width / r.width);
-      const y = (p.clientY - r.top)  * (sketch.height / r.height);
-      return {x,y};
-    }
-
-    function drawLine(a,b){
-      dctx.globalCompositeOperation = (mode === "eraser") ? "destination-out" : "source-over";
-      dctx.strokeStyle = "rgba(255,255,255,.95)";
-      const w = Number(thick.value)||3;
-      dctx.lineWidth = w * (sketch.width / sketch.getBoundingClientRect().width);
-      dctx.beginPath();
-      dctx.moveTo(a.x,a.y);
-      dctx.lineTo(b.x,b.y);
-      dctx.stroke();
-    }
-
-    function startDraw(ev){
-      if (drawArea.style.display === "none") return;
-      drawing = true;
-      last = pointerPos(ev);
-    }
-    function moveDraw(ev){
-      if (!drawing) return;
-      ev.preventDefault?.();
-      const p = pointerPos(ev);
-      drawLine(last,p);
-      last = p;
-    }
-    function endDraw(){ drawing = false; last = null; }
-
-    function exportSketch(){
-      // if almost empty, return ""
-      const img = dctx.getImageData(0,0,sketch.width,sketch.height).data;
-      let nonZero = 0;
-      for (let i=3;i<img.length;i+=4){ if (img[i] !== 0){ nonZero++; if (nonZero>250) break; } }
-      if (nonZero <= 250) return "";
-      return sketch.toDataURL("image/png", 0.92);
-    }
-
-    penBtn.addEventListener("click", ()=>{ mode = "pen"; toast("Kalem"); });
-    eraserBtn.addEventListener("click", ()=>{ mode = "eraser"; toast("Silgi"); });
-    clearDraw.addEventListener("click", ()=>{ clearSketch(); toast("Temizlendi"); });
-    thick.addEventListener("input", ()=>{ th.textContent = String(thick.value); });
-
-    drawMode.addEventListener("change", ()=>{
-      drawArea.style.display = drawMode.value === "on" ? "block" : "none";
+    canvas.addEventListener('mousedown', () => drawing = true);
+    window.addEventListener('mouseup', () => { drawing = false; ctx.beginPath(); });
+    canvas.addEventListener('mousemove', (e) => {
+        if(!drawing) return;
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#00ff88';
+        const rect = canvas.getBoundingClientRect();
+        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        ctx.stroke();
     });
+    function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
 
-    sketch.addEventListener("pointerdown", (e)=>{ sketch.setPointerCapture(e.pointerId); startDraw(e); });
-    sketch.addEventListener("pointermove", moveDraw, {passive:false});
-    sketch.addEventListener("pointerup", endDraw);
-    sketch.addEventListener("pointercancel", endDraw);
+    // --- MODAL YÖNETİMİ ---
+    function showModal(type) {
+        activeType = type;
+        document.getElementById('item-modal').style.display = 'block';
+        document.getElementById('text-fields').style.display = (type === 'draw') ? 'none' : 'block';
+        document.getElementById('draw-fields').style.display = (type === 'draw') ? 'block' : 'none';
+        document.getElementById('modal-title').innerText = (type === 'note' ? 'Not Bırak' : type === 'draw' ? 'Resim Çiz' : 'Kütüphane Kur');
+    }
+    function closeModal() { document.getElementById('item-modal').style.display = 'none'; clearCanvas(); }
 
-    // ====== Render ======
-    function iconFor(type){
-      if (type === "library") return "📚";
-      if (type === "report") return "🚩";
-      return "📝";
+    // --- VERİTABANI İŞLEMLERİ ---
+    async function processSave() {
+        // Ban Kontrolü
+        const { data: userData } = await supabase.from('site_users').select('banned_until').eq('user_id', userId).single();
+        if(userData && userData.banned_until && new Date(userData.banned_until) > new Date()) {
+            alert("Yasaklısınız! Kalan süre: " + Math.round((new Date(userData.banned_until)-new Date())/60000) + " dk.");
+            return;
+        }
+
+        const title = document.getElementById('title-in').value;
+        let content = (activeType === 'draw') ? canvas.toDataURL() : document.getElementById('content-in').value;
+        
+        if(!title || !content) return alert("Boş bırakmayın!");
+
+        const { error } = await supabase.from('items').insert([{
+            type: activeType, title, content, x: currentX, y: currentY, user_id: userId
+        }]);
+
+        if(!error) location.reload();
+        else alert("Hata: " + error.message);
     }
 
-    function shouldRender(row){
-      if (row.type === "report") return isAdmin && showReports; // only admin sees on map when enabled
-      return true;
+    async function loadItems() {
+        const { data } = await supabase.from('items').select('*');
+        if(data) data.forEach(renderItem);
+        if(isAdmin) loadReports();
     }
 
-    function elItem(row){
-      const div = document.createElement("div");
-      div.className = "item" + (row.type === "library" ? " library" : row.type === "report" ? " report" : "");
-      div.dataset.id = row.id;
-
-      const content = (row.type === "report") ? { text: row.content||"", draw:"" } : unpackContent(row.content);
-
-      div.innerHTML = `
-        <div class="head">
-          <div class="badge" aria-hidden="true">${iconFor(row.type)}</div>
-          <div style="min-width:0">
-            <div class="title"></div>
-            <div class="meta"></div>
-          </div>
-        </div>
-        <div class="body"></div>
-        <div class="drawWrap" style="display:none"><img class="drawImg" alt="Çizim" /></div>
-        <div class="foot">
-          <div class="small">#${String(row.id).slice(0,6)}</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="ghostBtn" type="button" data-act="report">🚩 RAPOR</button>
-            <button class="dangerBtn" type="button">🗑️ SİL</button>
-          </div>
-        </div>
-      `;
-
-      div.querySelector(".title").textContent = row.title || (row.type === "library" ? "(Kütüphane)" : row.type==="report" ? "(Rapor)" : "(Not)");
-      div.querySelector(".body").textContent = content.text || "";
-      div.querySelector(".meta").textContent = `X ${fmt(row.x)} • Y ${fmt(row.y)}`;
-
-      const dw = div.querySelector(".drawWrap");
-      const img = div.querySelector(".drawImg");
-      if (content.draw){
-        dw.style.display = "block";
-        img.src = content.draw;
-      }
-
-      div.style.left = (Number(row.x)||0) + "px";
-      div.style.top  = (Number(row.y)||0) + "px";
-
-      // report button
-      const reportBtn = div.querySelector('[data-act="report"]');
-      if (row.type === "report" || !reportingEnabled) reportBtn.style.display = "none";
-      reportBtn.addEventListener("click", (e)=>{ e.stopPropagation(); openReportModal(row); });
-
-      // delete button
-      const del = div.querySelector(".dangerBtn");
-      if (isAdmin){
-        del.style.display = "inline-flex";
-        del.addEventListener("click", (e)=>{ e.stopPropagation(); deleteItem(row.id); });
-      }
-
-      div.addEventListener("mousedown", (e)=>{ e.stopPropagation(); });
-      div.addEventListener("touchstart", (e)=>{ e.stopPropagation(); }, {passive:true});
-      return div;
-    }
-
-    function renderAll(){
-      board.innerHTML = "";
-      for (const row of items.values()) if (shouldRender(row)) board.appendChild(elItem(row));
-    }
-
-    function upsertRow(row){
-      if (!row || row.id==null) return;
-      items.set(row.id, row);
-      // fast path: re-render that element (or add) respecting filters
-      const idStr = String(row.id);
-      const existing = board.querySelector(`.item[data-id="${CSS.escape(idStr)}"]`);
-      if (!shouldRender(row)){
-        if (existing) existing.remove();
-        return;
-      }
-      if (existing){
-        // update minimal
-        existing.className = "item" + (row.type === "library" ? " library" : row.type === "report" ? " report" : "");
-        existing.style.left = (Number(row.x)||0) + "px";
-        existing.style.top  = (Number(row.y)||0) + "px";
-        const content = (row.type === "report") ? {text: row.content||"", draw:""} : unpackContent(row.content);
-        existing.querySelector(".title").textContent = row.title || (row.type==="library"?"(Kütüphane)":row.type==="report"?"(Rapor)":"(Not)");
-        existing.querySelector(".body").textContent = content.text || "";
-        existing.querySelector(".meta").textContent = `X ${fmt(row.x)} • Y ${fmt(row.y)}`;
-        const dw = existing.querySelector(".drawWrap");
-        const img = existing.querySelector(".drawImg");
-        if (content.draw){ dw.style.display="block"; img.src = content.draw; } else { dw.style.display="none"; img.removeAttribute("src"); }
-        const del = existing.querySelector(".dangerBtn");
-        del.style.display = isAdmin ? "inline-flex" : "none";
-        const reportBtn = existing.querySelector('[data-act="report"]');
-        reportBtn.style.display = (row.type==="report"||!reportingEnabled) ? "none" : "inline-flex";
-      } else {
-        board.appendChild(elItem(row));
-      }
-    }
-
-    function removeRow(id){
-      items.delete(id);
-      const el = board.querySelector(`.item[data-id="${CSS.escape(String(id))}"]`);
-      if (el) el.remove();
-    }
-
-    // ====== Data ======
-    async function loadItems(){
-      const { data, error } = await supabase.from(TABLE).select("id,title,content,x,y,type,user_id").order("id", { ascending: true });
-      if (error){
-        console.error(error);
-        toast("Supabase: izin/RLS");
-        return;
-      }
-      items.clear();
-      for (const row of data || []) items.set(row.id, row);
-      renderAll();
-    }
-
-    async function createItem(type, title, contentText, wx, wy, drawDataUrl=""){
-      title = (title||"").trim();
-      contentText = (contentText||"").trim();
-      if (!title && !contentText && !drawDataUrl){ toast("Boş içerik kaydedilmez"); return false; }
-
-      const payload = {
-        title: title || (type==="library"?"Yeni Kütüphane": type==="report"?"Rapor":"Yeni Not"),
-        content: type==="report" ? contentText : packContent(contentText, drawDataUrl),
-        x: Math.round(wx),
-        y: Math.round(wy),
-        type,
-        user_id
-      };
-
-      const { data, error } = await supabase.from(TABLE).insert(payload).select("id,title,content,x,y,type,user_id").single();
-      if (error){
-        console.error(error);
-        toast("Kaydedilemedi (RLS/izin)");
-        return false;
-      }
-      upsertRow(data);
-      return true;
-    }
-
-    async function deleteItem(id){
-      if (!isAdmin){ toast("Admin değilsin"); return; }
-      const { error } = await supabase.from(TABLE).delete().eq("id", id);
-      if (error){ console.error(error); toast("Silinemedi (RLS/izin)"); return; }
-      removeRow(id);
-      toast("Silindi");
-      rebuildReportsList();
-    }
-
-    function subscribeRealtime(){
-      const channel = supabase.channel("ln-items")
-        .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload)=>{
-          const e = payload.eventType;
-          if (e === "INSERT" || e === "UPDATE") upsertRow(payload.new);
-          else if (e === "DELETE") removeRow(payload.old?.id);
-          if (e === "INSERT" || e === "DELETE") rebuildReportsList();
-        })
-        .subscribe();
-      return channel;
-    }
-
-    // ====== Reports list UI ======
-    function rebuildReportsList(){
-      if (!isAdmin) return;
-      const reps = [];
-      for (const r of items.values()) if (r.type === "report") reps.push(r);
-      reps.sort((a,b)=> (b.id||0)-(a.id||0));
-      reportsList.innerHTML = "";
-
-      if (!reps.length){
-        reportsList.innerHTML = `<div class="chip"><span>✅</span><span>Rapor yok</span></div>`;
-        return;
-      }
-
-      for (const r of reps){
-        const info = unpackReport(r.content);
-        const targetId = info.targetId;
-        const reason = String(info.reason||"").slice(0,600);
-        const by = String(info.by||"");
-        const row = document.createElement("div");
-        row.className = "item report";
-        row.style.position = "relative";
-        row.style.left = "0";
-        row.style.top = "0";
-        row.innerHTML = `
-          <div class="head">
-            <div class="badge">🚩</div>
-            <div style="min-width:0">
-              <div class="title">Rapor • Hedef #${String(targetId||"?").slice(0,6)}</div>
-              <div class="meta">Gönderen: ${by ? by.slice(0,10)+"…" : "?"}</div>
+    function renderItem(item) {
+        const div = document.createElement('div');
+        div.className = `item ${item.type}`;
+        div.style.left = item.x + 'px';
+        div.style.top = item.y + 'px';
+        
+        let body = (item.type === 'draw') ? `<img src="${item.content}">` : `<p>${item.content}</p>`;
+        
+        div.innerHTML = `
+            <h4>${item.title}</h4>
+            ${body}
+            <div class="item-tools">
+                <button class="report-btn" onclick="reportItem(${item.id})">🚩 Rapor Et</button>
+                <button class="admin-del-btn" id="admin-del-${item.id}" onclick="adminAction(${item.id}, '${item.user_id}')">SİL & BANLA</button>
             </div>
-          </div>
-          <div class="body">${reason || "(Sebep yok)"}</div>
-          <div class="foot">
-            <div class="small">Rapor ID: #${String(r.id).slice(0,6)}</div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <button class="btn" data-act="jump">Haritada Aç</button>
-              <button class="btn warn" data-act="resolve">Kapat (Sil)</button>
-            </div>
-          </div>
         `;
-        row.querySelector('[data-act="jump"]').addEventListener("click", ()=>{
-          // find target item and center camera
-          const t = items.get(targetId);
-          if (!t){ toast("Hedef bulunamadı"); return; }
-          centerOn(Number(t.x)||0, Number(t.y)||0);
-          toast("Hedefe gidildi");
+        if(isAdmin) div.querySelector('.admin-del-btn').style.display = 'block';
+        map.appendChild(div);
+    }
+
+    // --- ADMİN & RAPOR & BAN ---
+    function handleAdmin() {
+        const p = prompt("Yönetici Şifresi:");
+        if(p === "Hasan0245") {
+            isAdmin = true;
+            document.getElementById('admin-reports').style.display = 'block';
+            document.querySelectorAll('.admin-del-btn').forEach(b => b.style.display = 'block');
+            alert("Admin Modu Aktif!");
+            loadReports();
+        }
+    }
+
+    async function reportItem(id) {
+        await supabase.from('items').update({ is_reported: true }).eq('id', id);
+        alert("Rapor edildi.");
+    }
+
+    async function loadReports() {
+        const { data } = await supabase.from('items').select('*').eq('is_reported', true);
+        const list = document.getElementById('report-list');
+        list.innerHTML = "";
+        data.forEach(r => {
+            list.innerHTML += `<div class="report-item"><span>${r.title}</span> <button onclick="adminAction(${r.id}, '${r.user_id}')">❌</button></div>`;
         });
-        row.querySelector('[data-act="resolve"]').addEventListener("click", ()=> deleteItem(r.id));
-        reportsList.appendChild(row);
-      }
     }
 
-    // ====== Interactions ======
-    function onPointerMove(e){
-      const p = ("touches" in e) ? e.touches[0] : e;
-      mouse.x = p.clientX; mouse.y = p.clientY;
-      const w = worldFromClient(mouse.x, mouse.y);
-      mouse.wx = w.x; mouse.wy = w.y;
-      updateCoords();
+    async function adminAction(itemId, targetUser) {
+        if(!confirm("Bu içeriği silip kullanıcıyı 5 dakika banlamak istediğine emin misin?")) return;
+        
+        // 1. İçeriği Sil
+        await supabase.from('items').delete().eq('id', itemId);
+        
+        // 2. 5 Dakika Ban At
+        let banTime = new Date(Date.now() + 5 * 60000).toISOString();
+        await supabase.from('site_users').upsert({ user_id: targetUser, banned_until: banTime });
+        
+        alert("İşlem tamamlandı!");
+        location.reload();
     }
 
-    boardWrap.addEventListener("mousedown", (e)=>{
-      if (e.button !== 0) return;
-      dragging = true;
-      dragStart = {x:e.clientX,y:e.clientY,cx:camX,cy:camY};
-      hideMenu();
-    });
-    window.addEventListener("mousemove", (e)=>{
-      onPointerMove(e);
-      if (!dragging) return;
-      camX = dragStart.cx + (e.clientX - dragStart.x);
-      camY = dragStart.cy + (e.clientY - dragStart.y);
-      applyTransform();
-    }, {passive:true});
-    window.addEventListener("mouseup", ()=>{ dragging = false; });
-
-    let longPressT = null;
-    let touchDragging = false;
-    let touchStart = null;
-
-    boardWrap.addEventListener("touchstart", (e)=>{
-      if (!e.touches?.length) return;
-      const t = e.touches[0];
-      touchDragging = true;
-      touchStart = {x:t.clientX,y:t.clientY,cx:camX,cy:camY, moved:false};
-      hideMenu();
-
-      clearTimeout(longPressT);
-      longPressT = setTimeout(()=>{
-        if (!touchStart || touchStart.moved) return;
-        const w = worldFromClient(touchStart.x, touchStart.y);
-        showMenuAt(touchStart.x, touchStart.y, w.x, w.y);
-      }, 520);
-    }, {passive:true});
-
-    boardWrap.addEventListener("touchmove", (e)=>{
-      onPointerMove(e);
-      if (!touchDragging || !touchStart) return;
-      const t = e.touches[0];
-      const dx = t.clientX - touchStart.x;
-      const dy = t.clientY - touchStart.y;
-      if (Math.hypot(dx,dy) > 6) touchStart.moved = true;
-      camX = touchStart.cx + dx;
-      camY = touchStart.cy + dy;
-      applyTransform();
-    }, {passive:true});
-
-    boardWrap.addEventListener("touchend", ()=>{
-      touchDragging = false;
-      touchStart = null;
-      clearTimeout(longPressT);
-    });
-
-    boardWrap.addEventListener("contextmenu", (e)=>{
-      e.preventDefault();
-      const w = worldFromClient(e.clientX, e.clientY);
-      showMenuAt(e.clientX, e.clientY, w.x, w.y);
-    });
-
-    window.addEventListener("mousemove", onPointerMove, {passive:true});
-    window.addEventListener("touchmove", onPointerMove, {passive:true});
-
-    window.addEventListener("mousedown", (e)=>{
-      if (menu.style.display === "block" && !menu.contains(e.target)) hideMenu();
-    });
-    window.addEventListener("blur", hideMenu);
-    window.addEventListener("resize", ()=>{ hideMenu(); resizeSketchForHiDPI(); });
-
-    addNoteBtn.addEventListener("click", ()=> openCreateModal("note"));
-    addLibBtn.addEventListener("click", ()=>{
-      if (libraryCredits<=0){ toast("Kütüphane hakkın kalmadı"); return; }
-      openCreateModal("library");
-    });
-
-    closeModal.addEventListener("click", closeCreateModal);
-    cancelBtn.addEventListener("click", closeCreateModal);
-    modalOverlay.addEventListener("mousedown", (e)=>{ if (e.target === modalOverlay) closeCreateModal(); });
-
-    async function doSave(){
-      const type = pendingType;
-      if (type === "library" && libraryCredits<=0){ toast("Kütüphane hakkın yok"); return; }
-
-      const reserved = (type === "library");
-      if (reserved) setCredits(libraryCredits - 1);
-
-      saveBtn.disabled = true;
-      const draw = (drawMode.value === "on") ? exportSketch() : "";
-      const ok = await createItem(type, inputT.value, inputC.value, ctxWorld.x, ctxWorld.y, draw);
-      saveBtn.disabled = false;
-
-      if (!ok && reserved) setCredits(libraryCredits + 1);
-      if (ok){ closeCreateModal(); toast(type === "library" ? "Kütüphane eklendi" : "Not eklendi"); }
+    function buyLibrary() {
+        let credits = parseInt(document.getElementById('lib-count').innerText);
+        if(credits > 0) {
+            document.getElementById('lib-count').innerText = credits - 1;
+            showModal('library');
+        } else alert("Hakkınız bitti!");
     }
 
-    saveBtn.addEventListener("click", doSave);
-    inputC.addEventListener("keydown", (e)=>{ if ((e.ctrlKey||e.metaKey) && e.key === "Enter") doSave(); });
-
-    // Report modal events
-    closeReport.addEventListener("click", closeReportModal);
-    reportCancel.addEventListener("click", closeReportModal);
-    reportOverlay.addEventListener("mousedown", (e)=>{ if (e.target === reportOverlay) closeReportModal(); });
-
-    async function sendReport(){
-      if (!pendingReportTarget) return;
-      const r = (reason.value||"").trim();
-      if (!r){ toast("Sebep yaz"); return; }
-      const target = pendingReportTarget;
-      const payload = packReport(target.id, r, user_id);
-      reportSend.disabled = true;
-      const ok = await createItem("report", `REPORT:${target.id}`, payload, Number(target.x)||0, Number(target.y)||0, "");
-      reportSend.disabled = false;
-      if (ok){ toast("Rapor gönderildi"); closeReportModal(); }
-    }
-    reportSend.addEventListener("click", sendReport);
-    reason.addEventListener("keydown", (e)=>{ if ((e.ctrlKey||e.metaKey) && e.key === "Enter") sendReport(); });
-
-    // Admin
-    gear.addEventListener("click", openAdmin);
-    closeAdmin.addEventListener("click", closeAdminModal);
-    adminCancel.addEventListener("click", closeAdminModal);
-    adminOverlay.addEventListener("mousedown", (e)=>{ if (e.target === adminOverlay) closeAdminModal(); });
-
-    function tryAdmin(){
-      if (pw.value === "Hasan0245"){
-        setAdmin(true);
-        toast("Admin mod aktif");
-      } else {
-        setAdmin(false);
-        toast("Şifre yanlış");
-      }
-    }
-    adminOk.addEventListener("click", tryAdmin);
-    pw.addEventListener("keydown", (e)=>{ if (e.key === "Enter") tryAdmin(); });
-
-    adminLogout.addEventListener("click", ()=>{ setAdmin(false); toast("Çıkış"); });
-    toggleReporting.addEventListener("change", ()=> setReporting(toggleReporting.value === "on"));
-    toggleShowReports.addEventListener("change", ()=> setShowReports(toggleShowReports.value === "on"));
-    openReports.addEventListener("click", openReportsModal);
-    reloadBtn.addEventListener("click", loadItems);
-
-    closeReports.addEventListener("click", closeReportsModal);
-    reportsClose.addEventListener("click", closeReportsModal);
-    reportsOverlay.addEventListener("mousedown", (e)=>{ if (e.target === reportsOverlay) closeReportsModal(); });
-
-    // Shortcuts
-    window.addEventListener("keydown", (e)=>{
-      if (e.key === "Escape"){
-        hideMenu();
-        closeCreateModal();
-        closeAdminModal();
-        closeReportModal();
-        closeReportsModal();
-      }
-    });
-
-    // Camera helpers
-    function center(){
-      const r = boardWrap.getBoundingClientRect();
-      camX = Math.round(r.width/2);
-      camY = Math.round(r.height/2);
-      applyTransform();
-    }
-    function centerOn(wx, wy){
-      const r = boardWrap.getBoundingClientRect();
-      camX = Math.round(r.width/2 - wx);
-      camY = Math.round(r.height/2 - wy);
-      applyTransform();
-    }
-
-    // Boot
-    center();
-    resizeSketchForHiDPI();
-    await loadItems();
-    subscribeRealtime();
-    rebuildReportsList();
-
-    // Small hint if db blocked
-    setTimeout(()=>{
-      if (!items.size) console.log("0 item: tablo boş veya RLS izin yok.");
-    }, 900);
-
-  </script>
+    window.onload = loadItems;
+</script>
 </body>
 </html>
