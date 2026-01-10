@@ -3,123 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>META-ENGINE V10 | ULTIMATE RECOVERY</title>
+    <title>META-ENGINE PRO V11 | HASAN EDITION</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;800&family=Plus+Jakarta+Sans:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;800&family=Inter:wght@300;400;700&display=swap" rel="stylesheet">
 
     <style>
         :root {
-            --neon: #00ff88; --bg: #050505; --ui-bg: rgba(20, 20, 20, 0.9);
-            --border: rgba(255, 255, 255, 0.1); --font: 'Plus Jakarta Sans', sans-serif;
+            --p: #00ff88; --p-glow: rgba(0, 255, 136, 0.3);
+            --bg: #030303; --card: rgba(15, 15, 15, 0.95);
+            --border: rgba(255, 255, 255, 0.08);
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body, html { 
-            width: 100%; height: 100%; 
+        * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
+        body { 
             background: var(--bg); color: white; 
-            font-family: var(--font); overflow: hidden; 
+            font-family: 'Inter', sans-serif; overflow: hidden; 
+            user-select: none; -webkit-user-drag: none;
         }
 
-        /* DÜNYA VE KAMERA */
-        #viewport { 
-            width: 100vw; height: 100vh; 
-            position: relative; overflow: hidden; 
-            cursor: grab; z-index: 1;
-        }
-        #viewport:active { cursor: grabbing; }
-
+        /* ENGINE CANVAS */
+        #viewport { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
         #camera { 
             position: absolute; width: 0; height: 0; 
-            transform-origin: center; will-change: transform;
-            pointer-events: none; /* Kamera katmanı tıklamayı engellememeli */
+            transform-origin: 0 0; will-change: transform;
+            pointer-events: none;
         }
 
-        #grid-bg {
-            position: absolute; width: 100000px; height: 100000px; 
-            left: -50000px; top: -50000px;
-            background-image: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
-            background-size: 50px 50px; z-index: -1;
+        #grid {
+            position: absolute; width: 400000px; height: 400000px; 
+            left: -200000px; top: -200000px;
+            background-image: 
+                linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 80px 80px; z-index: -1;
         }
 
-        #entities-layer { position: absolute; pointer-events: auto; }
+        #spawn-point {
+            position: absolute; width: 100px; height: 100px;
+            border: 2px dashed var(--p); border-radius: 50%;
+            transform: translate(-50%, -50%); opacity: 0.2;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; color: var(--p); font-family: 'JetBrains Mono';
+        }
 
-        /* OBJELER (NOTLAR) */
+        /* ENTITIES */
         .entity {
-            position: absolute; width: 250px; background: var(--ui-bg); 
-            border: 1px solid var(--border); border-radius: 12px; padding: 15px;
-            backdrop-filter: blur(10px); pointer-events: auto;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            transition: border-color 0.3s;
+            position: absolute; width: 280px; background: var(--card);
+            border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+            backdrop-filter: blur(20px); pointer-events: auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .entity:hover { border-color: var(--neon); }
-        .entity h4 { color: var(--neon); font-family: 'JetBrains Mono'; margin-bottom: 8px; display: flex; justify-content: space-between; }
-        .entity p { font-size: 13px; color: #ccc; line-height: 1.5; }
-        .library { border-left: 4px solid #00d4ff; cursor: pointer; }
+        .entity:hover { border-color: var(--p); transform: translateY(-5px); box-shadow: 0 0 20px var(--p-glow); }
+        .entity h4 { color: var(--p); font-family: 'JetBrains Mono'; font-size: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;}
+        .entity p { font-size: 14px; color: #bbb; line-height: 1.6; }
+        
+        .lib-tag { background: #00d4ff; color: black; font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 800; }
+        .library { border-top: 3px solid #00d4ff; cursor: pointer; }
 
-        /* HUD (UI) */
-        #hud { 
-            position: fixed; inset: 0; pointer-events: none; 
-            z-index: 100; padding: 25px; 
+        /* UI OVERLAY */
+        #hud { position: fixed; inset: 0; pointer-events: none; z-index: 1000; padding: 30px; }
+        .top-nav { display: flex; justify-content: space-between; align-items: center; }
+        .brand { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 18px; letter-spacing: -1px; }
+        .brand span { color: var(--p); }
+
+        .bottom-ui { position: absolute; bottom: 30px; left: 30px; right: 30px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .stats { background: var(--card); border: 1px solid var(--border); padding: 15px 25px; border-radius: 15px; display: flex; gap: 30px; pointer-events: auto; }
+        .stat-item { display: flex; flex-direction: column; }
+        .stat-item label { font-size: 9px; color: #666; font-weight: 800; text-transform: uppercase; }
+        .stat-item span { font-family: 'JetBrains Mono'; color: #fff; font-size: 14px; }
+
+        /* CONTEXT MENU */
+        #ctx { 
+            position: fixed; display: none; background: #111; border: 1px solid var(--border);
+            border-radius: 10px; padding: 6px; z-index: 2000; width: 200px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
-        .hud-content { display: flex; justify-content: space-between; align-items: flex-end; height: 100%; }
-        
-        .stat-box { 
-            pointer-events: auto; background: var(--ui-bg); 
-            border: 1px solid var(--border); padding: 10px 20px; 
-            border-radius: 10px; font-family: 'JetBrains Mono'; font-size: 12px;
+        .ctx-item { 
+            padding: 10px 15px; cursor: pointer; border-radius: 6px; font-size: 13px;
+            display: flex; align-items: center; gap: 10px; transition: 0.2s;
         }
-        
-        #admin-btn {
-            pointer-events: auto; width: 45px; height: 45px; 
-            background: var(--ui-bg); border: 1px solid var(--border);
-            border-radius: 50%; display: flex; align-items: center; 
-            justify-content: center; cursor: pointer; color: var(--neon);
-        }
+        .ctx-item:hover { background: var(--p); color: black; }
 
         /* MODAL */
-        #modal-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.8);
-            display: none; align-items: center; justify-content: center;
-            z-index: 1000; pointer-events: auto;
+        #modal-overlay { 
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9); 
+            display: none; align-items: center; justify-content: center; z-index: 3000; pointer-events: auto;
         }
-        .modal { background: #111; padding: 30px; border-radius: 15px; width: 350px; border: 1px solid var(--neon); }
-        input, textarea { width: 100%; background: #000; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 10px; border-radius: 8px; }
-        .btn { width: 100%; padding: 12px; background: var(--neon); border: none; font-weight: bold; border-radius: 8px; cursor: pointer; color: black; }
+        .modal { background: #111; border: 1px solid var(--p); padding: 40px; border-radius: 20px; width: 400px; }
+        input, textarea, select { width: 100%; background: #000; border: 1px solid #222; color: white; padding: 15px; margin-bottom: 15px; border-radius: 10px; }
+        .btn-main { width: 100%; padding: 15px; background: var(--p); color: black; border: none; font-weight: 800; border-radius: 10px; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <div id="viewport">
         <div id="camera">
-            <div id="grid-bg"></div>
+            <div id="grid"></div>
+            <div id="spawn-point">SPAWN_00</div>
             <div id="entities-layer"></div>
         </div>
     </div>
 
     <div id="hud">
-        <div style="pointer-events: auto; font-weight: 800;">META-ENGINE <span id="room-id" style="color:var(--neon)">MAIN</span></div>
-        <div class="hud-content">
-            <div class="stat-box">
-                POS: <span id="coords">0,0</span> | 
-                ONLINE: <span id="online">0</span>
-            </div>
-            <div id="admin-btn" onclick="Admin.init()"><i class="fa-solid fa-shield-halved"></i></div>
+        <div class="top-nav">
+            <div class="brand">META_<span>ENGINE</span>.SYS</div>
+            <div id="room-display" style="font-family:'JetBrains Mono'; font-size: 12px; background:rgba(255,255,255,0.05); padding: 5px 15px; border-radius: 20px;">ROOM: MAIN</div>
         </div>
+
+        <div class="bottom-ui">
+            <div class="stats">
+                <div class="stat-item"><label>Coordinates</label><span id="val-coords">0, 0</span></div>
+                <div class="stat-item"><label>Users</label><span id="val-online">1</span></div>
+                <div class="stat-item"><label>Latency</label><span>14ms</span></div>
+            </div>
+            <div id="admin-trigger" onclick="Admin.auth()" style="pointer-events: auto; cursor: pointer; opacity: 0.3;"><i class="fa-solid fa-shield-halved"></i></div>
+        </div>
+    </div>
+
+    <div id="ctx">
+        <div class="ctx-item" onclick="Engine.openModal('note')"><i class="fa-solid fa-pen"></i> Not Bırak</div>
+        <div class="ctx-item" onclick="Engine.openModal('library')"><i class="fa-solid fa-door-open"></i> Kütüphane Kur</div>
+        <div class="ctx-item" onclick="Engine.resetCam()"><i class="fa-solid fa-arrows-to-dot"></i> Merkeze Dön</div>
     </div>
 
     <div id="modal-overlay">
         <div class="modal">
-            <h3 style="margin-bottom:15px">YENİ NOT BIRAK</h3>
-            <input id="title" placeholder="Başlık">
-            <textarea id="content" rows="4" placeholder="Mesajınız..."></textarea>
-            <select id="type" style="width:100%; background:#000; color:white; padding:10px; margin-bottom:10px; border-radius:8px; border:1px solid #333;">
-                <option value="note">Düz Not</option>
-                <option value="library">Kütüphane (Oda)</option>
-            </select>
-            <button class="btn" onclick="Engine.save()">DÜNYAYA EKLE</button>
-            <button class="btn" style="background:none; color:white; margin-top:5px" onclick="Engine.closeModal()">İPTAL</button>
+            <h2 id="modal-title" style="margin-bottom:20px; font-family:'JetBrains Mono'">CREATE_ENTITY</h2>
+            <input id="in-title" placeholder="Başlık...">
+            <textarea id="in-content" rows="4" placeholder="İçerik mesajı..."></textarea>
+            <button class="btn-main" onclick="Engine.save()">EVRENE GÖNDER</button>
+            <button class="btn-main" style="background:none; color:#555" onclick="Engine.closeModal()">İPTAL</button>
         </div>
     </div>
 
@@ -130,13 +146,10 @@
 
         const Engine = {
             room: 'main',
-            camX: window.innerWidth / 2,
-            camY: window.innerHeight / 2,
-            zoom: 1,
-            isDragging: false,
-            hasMoved: false,
-            startX: 0, startY: 0,
-            mouseWorld: { x: 0, y: 0 },
+            cam: { x: window.innerWidth/2, y: window.innerHeight/2, z: 1 },
+            drag: { active: false, startX: 0, startY: 0, moved: false },
+            mouse: { x: 0, y: 0 },
+            modalType: 'note',
 
             async init() {
                 this.bindEvents();
@@ -146,60 +159,68 @@
             },
 
             bindEvents() {
-                window.addEventListener('mousedown', (e) => {
-                    if(e.target.closest('.stat-box') || e.target.closest('#admin-btn') || e.target.closest('.modal')) return;
-                    this.isDragging = true;
-                    this.hasMoved = false;
-                    this.startX = e.clientX - this.camX;
-                    this.startY = e.clientY - this.camY;
-                });
+                // Sağ tık engelleme ve menü
+                window.oncontextmenu = (e) => {
+                    e.preventDefault();
+                    const menu = document.getElementById('ctx');
+                    menu.style.display = 'block';
+                    menu.style.left = e.clientX + 'px';
+                    menu.style.top = e.clientY + 'px';
+                };
 
-                window.addEventListener('mousemove', (e) => {
-                    if (this.isDragging) {
-                        this.hasMoved = true;
-                        this.camX = e.clientX - this.startX;
-                        this.camY = e.clientY - this.startY;
+                window.onclick = () => document.getElementById('ctx').style.display = 'none';
+
+                window.onmousedown = (e) => {
+                    if(e.button !== 0) return;
+                    this.drag.active = true;
+                    this.drag.moved = false;
+                    this.drag.startX = e.clientX - this.cam.x;
+                    this.drag.startY = e.clientY - this.cam.y;
+                };
+
+                window.onmousemove = (e) => {
+                    if(this.drag.active) {
+                        this.drag.moved = true;
+                        this.cam.x = e.clientX - this.drag.startX;
+                        this.cam.y = e.clientY - this.drag.startY;
                         this.render();
                     }
-                    this.mouseWorld.x = Math.round((e.clientX - this.camX) / this.zoom);
-                    this.mouseWorld.y = Math.round((e.clientY - this.camY) / this.zoom);
-                    document.getElementById('coords').innerText = `${this.mouseWorld.x},${this.mouseWorld.y}`;
-                });
+                    this.mouse.x = Math.round((e.clientX - this.cam.x) / this.cam.z);
+                    this.mouse.y = Math.round((e.clientY - this.cam.y) / this.cam.z);
+                    document.getElementById('val-coords').innerText = `${this.mouse.x}, ${this.mouse.y}`;
+                };
 
-                window.addEventListener('mouseup', (e) => {
-                    if (this.isDragging && !this.hasMoved) {
-                        document.getElementById('modal-overlay').style.display = 'flex';
-                    }
-                    this.isDragging = false;
-                });
+                window.onmouseup = () => this.drag.active = false;
 
-                window.addEventListener('wheel', (e) => {
-                    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-                    this.zoom = Math.min(Math.max(0.3, this.zoom * delta), 3);
+                window.onwheel = (e) => {
+                    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+                    this.cam.z = Math.min(Math.max(0.2, this.cam.z * factor), 4);
                     this.render();
-                });
+                };
             },
 
             render() {
-                document.getElementById('camera').style.transform = `translate(${this.camX}px, ${this.camY}px) scale(${this.zoom})`;
+                document.getElementById('camera').style.transform = `translate(${this.cam.x}px, ${this.cam.y}px) scale(${this.cam.z})`;
             },
 
             async loadRoom(id) {
                 this.room = id;
-                document.getElementById('room-id').innerText = id.toUpperCase();
-                const { data, error } = await supabaseClient.from('items').select('*').eq('room_id', id);
-                if (data) this.drawItems(data);
+                document.getElementById('room-display').innerText = `ROOM: ${id.toUpperCase()}`;
+                const { data } = await supabaseClient.from('items').select('*').eq('room_id', id);
+                this.draw(data || []);
             },
 
-            drawItems(items) {
+            draw(items) {
                 const layer = document.getElementById('entities-layer');
                 layer.innerHTML = '';
                 items.forEach(item => {
                     const div = document.createElement('div');
                     div.className = `entity ${item.type}`;
-                    div.style.left = item.x + 'px';
-                    div.style.top = item.y + 'px';
-                    div.innerHTML = `<h4>${item.title}</h4><p>${item.content}</p>`;
+                    div.style.left = item.x + 'px'; div.style.top = item.y + 'px';
+                    
+                    const tag = item.type === 'library' ? `<span class="lib-tag">LIBRARY</span>` : '';
+                    div.innerHTML = `<h4>${item.title} ${tag}</h4><p>${item.content}</p>`;
+                    
                     if(item.type === 'library') {
                         div.onclick = (e) => { e.stopPropagation(); this.loadRoom(item.title); };
                     }
@@ -208,32 +229,46 @@
             },
 
             setupRealtime() {
-                supabaseClient.channel('any').on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => {
+                supabaseClient.channel('db').on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => {
                     this.loadRoom(this.room);
                 }).subscribe();
             },
 
+            openModal(type) {
+                this.modalType = type;
+                document.getElementById('modal-title').innerText = type === 'note' ? 'CREATE_NOTE' : 'CREATE_LIBRARY';
+                document.getElementById('modal-overlay').style.display = 'flex';
+            },
+
+            closeModal() { document.getElementById('modal-overlay').style.display = 'none'; },
+
             async save() {
-                const t = document.getElementById('title').value;
-                const c = document.getElementById('content').value;
-                const type = document.getElementById('type').value;
+                const t = document.getElementById('in-title').value;
+                const c = document.getElementById('in-content').value;
                 if(!t || !c) return;
 
                 await supabaseClient.from('items').insert([{
-                    title: t, content: c, type: type, 
-                    x: this.mouseWorld.x, y: this.mouseWorld.y, 
-                    room_id: this.room
+                    title: t, content: c, type: this.modalType,
+                    x: this.mouse.x, y: this.mouse.y, room_id: this.room
                 }]);
+                
+                document.getElementById('in-title').value = '';
+                document.getElementById('in-content').value = '';
                 this.closeModal();
             },
 
-            closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+            resetCam() {
+                this.cam.x = window.innerWidth/2;
+                this.cam.y = window.innerHeight/2;
+                this.cam.z = 1;
+                this.render();
+            }
         };
 
         const Admin = {
-            init() {
-                const p = prompt("ADMIN PASS:");
-                if(p === "Hasan024") alert("Admin yetkisi aktif (Geliştirme aşamasında)");
+            auth() {
+                const p = prompt("ADMIN_KEY:");
+                if(p === "Hasan024") alert("Sistem yöneticisi onaylandı.");
             }
         };
 
