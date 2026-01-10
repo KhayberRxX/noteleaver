@@ -2,571 +2,407 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Pro Meta-Engine | Ultimate Realtime</title>
+    <title>Meta-Engine: Stable Core</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;800&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --p: #00ff88; --p-glow: rgba(0, 255, 136, 0.4);
-            --bg: #050505; --ui: #0f0f0f;
-            --border: rgba(255, 255, 255, 0.1);
-            --danger: #ff3333; --danger-glow: rgba(255, 51, 51, 0.4);
-            --warn: #ffcc00;
-            --font-main: 'Inter', sans-serif;
-            --font-tech: 'JetBrains Mono', monospace;
+            --bg: #050505; --ui: #111; --border: #333;
+            --p: #00ff88; --danger: #ff4444;
+            --font: 'Inter', sans-serif;
         }
-
-        * { box-sizing: border-box; outline: none; user-select: none; }
-        body, html { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: var(--bg); color: white; font-family: var(--font-main); }
-
-        /* --- STAGE --- */
-        #viewport { width: 100%; height: 100%; position: relative; overflow: hidden; background: radial-gradient(circle at center, #111 0%, #000 100%); cursor: crosshair; }
-        #camera {
-            position: absolute; width: 200000px; height: 200000px;
-            background-image: radial-gradient(var(--border) 1px, transparent 1px);
-            background-size: 100px 100px; transform-origin: 0 0; will-change: transform;
+        body { margin: 0; overflow: hidden; background: var(--bg); color: white; font-family: var(--font); user-select: none; }
+        
+        /* --- CAMERA & WORLD --- */
+        #viewport { width: 100vw; height: 100vh; position: relative; cursor: crosshair; overflow: hidden; }
+        #camera { position: absolute; transform-origin: 0 0; will-change: transform; }
+        
+        /* Sonsuz Izgara */
+        #grid {
+            position: absolute; left: -100000px; top: -100000px; width: 200000px; height: 200000px;
+            background-image: radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 50px; pointer-events: none;
         }
+        /* Başlangıç Noktası İşareti */
+        #origin {
+            position: absolute; left: 0; top: 0; width: 20px; height: 20px;
+            border: 2px solid var(--p); border-radius: 50%; transform: translate(-50%, -50%);
+            opacity: 0.5; pointer-events: none; z-index: 0;
+        }
+        #origin::after { content: 'SPAWN'; position: absolute; top: 20px; left: -10px; font-size: 10px; color: var(--p); font-family: 'JetBrains Mono'; }
 
         /* --- ENTITIES --- */
         .entity {
-            position: absolute; padding: 20px; background: rgba(15, 15, 15, 0.95);
-            border: 1px solid var(--border); border-radius: 16px;
-            min-width: 260px; max-width: 400px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            transition: transform 0.2s, border-color 0.2s;
-            backdrop-filter: blur(5px);
+            position: absolute; width: 220px; padding: 15px; background: rgba(10,10,10,0.9);
+            border: 1px solid var(--border); border-radius: 12px; font-size: 13px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: 0.2s;
         }
-        .entity:hover { border-color: var(--p); transform: scale(1.02); z-index: 100; }
-        .entity h3 { margin: 0 0 10px 0; font-family: var(--font-tech); font-size: 14px; color: var(--p); display: flex; justify-content: space-between; }
-        .entity p { margin: 0; color: #ccc; font-size: 14px; line-height: 1.5; white-space: pre-wrap; user-select: text; }
+        .entity:hover { transform: scale(1.05); border-color: #666; z-index: 100; }
+        .entity h3 { margin: 0 0 8px 0; font-size: 14px; color: var(--p); display: flex; justify-content: space-between; }
+        .entity p { margin: 0; color: #ccc; line-height: 1.4; white-space: pre-wrap; }
         
-        .type-library { border-left: 4px solid #00d4ff; }
-        .type-library h3 { color: #00d4ff; cursor: pointer; text-decoration: underline; }
+        .type-library { border-left: 3px solid #00d4ff; cursor: pointer; }
+        .type-library h3 { color: #00d4ff; text-decoration: underline; }
         
-        .is-reported { border: 2px solid var(--danger) !important; box-shadow: 0 0 20px var(--danger-glow); animation: pulseRed 2s infinite; }
-        @keyframes pulseRed { 0% { box-shadow: 0 0 10px var(--danger-glow); } 50% { box-shadow: 0 0 30px var(--danger-glow); } 100% { box-shadow: 0 0 10px var(--danger-glow); } }
+        .is-reported { border: 1px solid var(--danger); box-shadow: 0 0 10px rgba(255, 68, 68, 0.2); }
 
-        .action-icon { cursor: pointer; opacity: 0.6; transition: 0.2s; margin-left: 8px; }
-        .action-icon:hover { opacity: 1; transform: scale(1.2); }
-        .icon-flag:hover { color: var(--danger); }
-        .icon-del:hover { color: var(--danger); }
+        /* --- UI LAYER --- */
+        #ui-layer { position: fixed; inset: 0; pointer-events: none; z-index: 1000; }
+        .pointer-auto { pointer-events: auto; }
 
-        /* --- UI OVERLAYS --- */
-        #hud { position: fixed; bottom: 20px; left: 20px; display: flex; gap: 10px; z-index: 1000; pointer-events: none; }
-        .chip { background: var(--ui); padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); font-family: var(--font-tech); font-size: 12px; color: #888; display: flex; align-items: center; gap: 8px; }
-        .chip span { color: var(--p); font-weight: bold; }
-        .live-dot { width: 8px; height: 8px; background: var(--p); border-radius: 50%; box-shadow: 0 0 10px var(--p); animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.3; } }
+        #top-bar { position: absolute; top: 0; left: 0; width: 100%; padding: 20px; display: flex; justify-content: space-between; align-items: flex-start; }
+        .room-title { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 24px; text-transform: uppercase; }
+        .back-btn { background: var(--p); color: black; padding: 8px 16px; border: none; font-weight: bold; cursor: pointer; display: none; border-radius: 4px; }
 
-        #nav-bar { position: fixed; top: 0; left: 0; width: 100%; padding: 20px; display: flex; justify-content: space-between; pointer-events: none; z-index: 2000; }
-        .title-display { font-family: var(--font-tech); font-weight: 800; font-size: 24px; color: white; text-shadow: 0 0 20px rgba(255,255,255,0.2); pointer-events: auto; }
-        .back-btn { background: var(--p); color: black; padding: 10px 20px; border-radius: 4px; font-weight: 900; cursor: pointer; pointer-events: auto; display: none; border: none; }
+        #admin-btn { position: absolute; bottom: 20px; right: 20px; background: #111; border: 1px solid #444; color: #666; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
+        body.is-admin #admin-btn { border-color: var(--danger); color: var(--danger); box-shadow: 0 0 15px rgba(255,0,0,0.2); }
 
-        /* --- ADMIN DASHBOARD --- */
+        /* --- ADMIN PANEL --- */
         #admin-panel {
-            position: fixed; top: 0; right: -400px; width: 350px; height: 100vh;
-            background: rgba(10, 10, 10, 0.98); border-left: 1px solid var(--p);
-            z-index: 5000; transition: right 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-            padding: 20px; display: flex; flex-direction: column; backdrop-filter: blur(10px);
+            position: absolute; right: -320px; top: 0; width: 300px; height: 100vh;
+            background: rgba(0,0,0,0.95); border-left: 1px solid var(--p);
+            transition: right 0.3s; padding: 20px; overflow-y: auto; pointer-events: auto;
         }
-        #admin-panel.open { right: 0; }
-        .panel-header { font-family: var(--font-tech); font-size: 18px; color: var(--p); margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-        .stat-box { background: #1a1a1a; padding: 10px; border-radius: 8px; border: 1px solid var(--border); text-align: center; }
-        .stat-num { font-size: 24px; font-weight: 900; color: white; display: block; }
-        .stat-label { font-size: 10px; color: #666; font-family: var(--font-tech); }
-        
-        .report-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        .report-item { background: #151515; border: 1px solid var(--danger); padding: 10px; border-radius: 8px; cursor: pointer; transition: 0.2s; position: relative; }
-        .report-item:hover { background: #221111; }
-        .report-actions { display: flex; gap: 5px; margin-top: 5px; }
-        .mini-btn { flex: 1; border: none; padding: 5px; font-size: 10px; font-weight: bold; cursor: pointer; border-radius: 4px; }
-        .btn-del { background: var(--danger); color: white; }
-        .btn-ignore { background: #333; color: #aaa; }
+        body.panel-open #admin-panel { right: 0; }
+        .report-item { background: #1a1a1a; padding: 10px; margin-bottom: 10px; border-radius: 6px; border-left: 2px solid var(--danger); }
+        .adm-btn { width: 100%; padding: 5px; margin-top: 5px; background: #333; border: none; color: white; cursor: pointer; font-size: 11px; }
+        .adm-btn:hover { background: var(--danger); }
 
-        /* --- ADMIN TRIGGER --- */
-        #admin-trigger {
-            position: fixed; bottom: 20px; right: 20px; z-index: 4000;
-            background: #111; border: 1px solid var(--border); color: #666;
-            width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-size: 18px; cursor: pointer; transition: 0.3s;
-        }
-        #admin-trigger:hover { color: white; border-color: white; }
-        #admin-trigger.is-admin { border-color: var(--p); color: var(--p); box-shadow: 0 0 15px var(--p-glow); }
-        #admin-trigger.is-admin:hover { transform: rotate(90deg); }
-
-        /* --- CUSTOM TOAST & MODAL --- */
-        #toast-container { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; z-index: 6000; pointer-events: none; }
-        .toast { background: #111; border: 1px solid var(--border); padding: 12px 24px; border-radius: 50px; color: white; font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(20px); transition: 0.3s; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px; }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.success { border-color: var(--p); } .toast.success span { color: var(--p); }
-        .toast.error { border-color: var(--danger); } .toast.error span { color: var(--danger); }
-
-        #confirm-modal {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 7000;
-            display: none; align-items: center; justify-content: center; backdrop-filter: blur(8px);
-        }
-        .c-box { background: #111; border: 1px solid var(--p); width: 300px; padding: 25px; border-radius: 20px; text-align: center; box-shadow: 0 0 50px rgba(0,255,136,0.1); }
-        .c-title { font-size: 18px; font-weight: 900; margin-bottom: 10px; color: white; }
-        .c-btns { display: flex; gap: 10px; margin-top: 20px; }
-        .c-btn { flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: 800; cursor: pointer; font-size: 12px; }
-        .c-yes { background: var(--p); color: black; }
-        .c-no { background: #222; color: white; }
-
-        /* --- INPUT MODAL (Veri Girişi) --- */
-        #input-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 6500; display: none; align-items: center; justify-content: center; }
-        .input-box { width: 400px; background: #0a0a0a; border: 1px solid #333; padding: 30px; border-radius: 20px; }
-        input, textarea { width: 100%; background: #151515; border: 1px solid #333; color: white; padding: 15px; margin-bottom: 15px; border-radius: 8px; font-family: var(--font-main); }
-        input:focus, textarea:focus { border-color: var(--p); }
+        /* --- MODALS --- */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; pointer-events: auto; z-index: 2000; }
+        .box { background: #111; border: 1px solid #444; padding: 25px; border-radius: 12px; width: 350px; }
+        input, textarea { width: 100%; background: #000; border: 1px solid #333; color: white; padding: 10px; margin-bottom: 10px; border-radius: 6px; font-family: var(--font); }
+        .btn { width: 100%; padding: 12px; background: var(--p); border: none; font-weight: bold; cursor: pointer; border-radius: 6px; }
 
         /* --- CONTEXT MENU --- */
-        #ctx { position: fixed; display: none; background: #111; border: 1px solid #333; padding: 5px; border-radius: 10px; z-index: 6000; width: 180px; }
-        .ctx-item { padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; color: #ccc; }
-        .ctx-item:hover { background: var(--p); color: black; }
+        #ctx { position: absolute; background: #111; border: 1px solid #444; padding: 5px; display: none; width: 160px; z-index: 5000; border-radius: 8px; }
+        .ctx-opt { padding: 10px; cursor: pointer; font-size: 13px; color: #ccc; }
+        .ctx-opt:hover { background: var(--p); color: black; border-radius: 4px; }
+        
+        /* Admin Özellikleri (Sadece body.is-admin varken görünür) */
+        .admin-only { display: none !important; }
+        body.is-admin .admin-only { display: inline-block !important; }
     </style>
 </head>
 <body>
 
 <div id="viewport">
-    <div id="camera"></div>
-</div>
-
-<div id="nav-bar">
-    <div class="title-display" id="room-title">ANA EVREN</div>
-    <button class="back-btn" id="back-home" onclick="App.teleport('main')">MERKEZE DÖN</button>
-</div>
-
-<div id="hud">
-    <div class="chip"><div class="live-dot"></div><span>CANLI</span></div>
-    <div class="chip">COORD <span id="hud-xy">0, 0</span></div>
-    <div class="chip">ZOOM <span id="hud-z">100%</span></div>
-</div>
-
-<div id="admin-trigger" onclick="Admin.toggle()">⚙️</div>
-
-<div id="admin-panel">
-    <div class="panel-header">
-        <span>SİSTEM PANELİ</span>
-        <span style="font-size:12px; cursor:pointer" onclick="Admin.toggle()">KAPAT [X]</span>
+    <div id="camera">
+        <div id="grid"></div>
+        <div id="origin"></div> <div id="entities"></div>
     </div>
-    
-    <div class="stat-grid">
-        <div class="stat-box">
-            <span class="stat-num" id="stat-total">0</span>
-            <span class="stat-label">TOPLAM OBJE</span>
+</div>
+
+<div id="ui-layer">
+    <div id="top-bar">
+        <div>
+            <div class="room-title" id="room-name">ANA EVREN</div>
+            <small style="color:#666; font-family:'JetBrains Mono'" id="coords">0, 0</small>
         </div>
-        <div class="stat-box" style="border-color:var(--danger)">
-            <span class="stat-num" style="color:var(--danger)" id="stat-reported">0</span>
-            <span class="stat-label">RAPORLU</span>
-        </div>
+        <button class="back-btn pointer-auto" id="btn-back" onclick="Game.loadRoom('main')">← GERİ DÖN</button>
     </div>
 
-    <div style="font-size:12px; font-weight:bold; color:#666; margin-bottom:10px; display:flex; justify-content:space-between;">
-        <span>RAPOR LİSTESİ</span>
-        <span style="cursor:pointer; color:var(--p)" onclick="Admin.refresh()">YENİLE ↻</span>
+    <div id="admin-panel">
+        <h3 style="color:var(--p); margin-top:0">YÖNETİM</h3>
+        <div id="report-list"></div>
+        <button class="adm-btn" style="background:#444; margin-top:20px" onclick="Admin.logout()">ÇIKIŞ YAP</button>
     </div>
-    <div class="report-list" id="report-container">
-        <div style="text-align:center; color:#444; margin-top:20px;">Temiz</div>
-    </div>
-    
-    <button class="c-btn c-no" style="margin-top:20px; width:100%" onclick="Admin.logout()">YÖNETİCİ ÇIKIŞI</button>
+
+    <button id="admin-btn" class="pointer-auto" onclick="Admin.toggle()">⚙️</button>
 </div>
 
-<div id="toast-container"></div>
-
-<div id="confirm-modal">
-    <div class="c-box">
-        <div class="c-title" id="c-msg">Onaylıyor musun?</div>
-        <input type="password" id="c-input" style="display:none; text-align:center" placeholder="Şifre">
-        <div class="c-btns">
-            <button class="c-btn c-no" onclick="UI.closeConfirm()">Vazgeç</button>
-            <button class="c-btn c-yes" id="c-yes-btn">ONAYLA</button>
-        </div>
+<div class="modal" id="modal-input">
+    <div class="box">
+        <h3 style="margin-top:0; color:var(--p)">Yeni Kayıt</h3>
+        <input id="inp-t" placeholder="Başlık">
+        <textarea id="inp-c" rows="4" placeholder="İçerik..."></textarea>
+        <button class="btn" onclick="Game.save()">OLUŞTUR</button>
+        <button class="btn" style="background:transparent; color:#666; margin-top:5px" onclick="UI.closeModals()">İptal</button>
     </div>
 </div>
 
-<div id="input-modal">
-    <div class="input-box">
-        <h3 style="margin-top:0; color:var(--p)">Veri Ekle</h3>
-        <input type="text" id="inp-title" placeholder="Başlık">
-        <textarea id="inp-content" rows="4" placeholder="İçerik..."></textarea>
-        <button class="c-btn c-yes" style="width:100%" onclick="App.saveItem()">YAYINLA</button>
-        <button class="c-btn c-no" style="width:100%; margin-top:10px" onclick="document.getElementById('input-modal').style.display='none'">İPTAL</button>
+<div class="modal" id="modal-pass">
+    <div class="box">
+        <h3 style="margin-top:0">Yönetici Girişi</h3>
+        <input type="password" id="inp-pass" placeholder="Şifre" style="text-align:center">
+        <button class="btn" onclick="Admin.login()">GİRİŞ</button>
+        <button class="btn" style="background:transparent; color:#666; margin-top:5px" onclick="UI.closeModals()">Vazgeç</button>
     </div>
 </div>
 
-<div id="ctx">
-    <div class="ctx-item" onclick="App.openCreate('note')">📝 Not Bırak</div>
-    <div class="ctx-item" onclick="App.openCreate('library')">📚 Kütüphane Oluştur</div>
+<div id="ctx" class="pointer-auto">
+    <div class="ctx-opt" onclick="UI.openInput('note')">📝 Not Ekle</div>
+    <div class="ctx-opt" onclick="UI.openInput('library')">📚 Kütüphane Kur</div>
 </div>
 
 <script>
-// --- KONFIGÜRASYON ---
-const CONFIG = {
-    SB_URL: "https://ssfgvjudifodfhovhpzx.supabase.co",
-    SB_KEY: "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo",
-    PASS: "Hasan024",
-    LIMIT: 100000
+// --- AYARLAR ---
+const CFG = {
+    URL: "https://ssfgvjudifodfhovhpzx.supabase.co",
+    KEY: "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo",
+    PASS: "Hasan024"
 };
 
-// --- ANA UYGULAMA MOTORU ---
-const App = {
-    db: null,
-    chn: null, // Realtime kanalı
+const DB = supabase.createClient(CFG.URL, CFG.KEY);
+
+// --- OYUN MOTORU ---
+const Game = {
     room: 'main',
-    state: { x: 0, y: 0, scale: 1, drag: false, last: {x:0,y:0}, createPos: {x:0,y:0}, type: 'note' },
-    items: [], // Client-side cache
+    items: [],
+    cam: { x: 0, y: 0, z: 1 },
+    drag: { active: false, x: 0, y: 0 },
+    clickPos: { x: 0, y: 0 }, // Notun bırakılacağı koordinat
+    inputType: 'note',
 
     init: async function() {
-        this.db = supabase.createClient(CONFIG.SB_URL, CONFIG.SB_KEY);
-        this.setupInput();
         this.centerCam();
+        this.bindEvents();
+        
+        // Admin kontrolü
+        if(localStorage.getItem('isAdmin') === 'true') document.body.classList.add('is-admin');
         
         // İlk yükleme
         await this.loadRoom('main');
         
-        // Admin kontrolü
-        if(Admin.isLogged()) Admin.enableUI();
-
-        // Realtime Başlatma
-        this.subscribe();
+        // Realtime Dinleme (Canlı)
+        DB.channel('public:items')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, payload => {
+              this.handleLive(payload);
+          }).subscribe();
     },
 
-    // --- REALTIME SUBSCRIPTION (CANLI) ---
-    subscribe: function() {
-        if(this.chn) this.db.removeChannel(this.chn);
-        this.chn = this.db.channel('public:items')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, payload => {
-                this.handleLiveUpdate(payload);
-            })
-            .subscribe((status) => {
-                if(status === 'SUBSCRIBED') UI.toast('📡 Canlı Veri Akışı Bağlandı', 'success');
-            });
-    },
-
-    handleLiveUpdate: function(payload) {
-        // Sadece mevcut odadaki değişiklikleri veya global silinmeleri yansıt
-        const { eventType, new: newItem, old: oldItem } = payload;
-
-        if (eventType === 'INSERT') {
-            if(newItem.room_id === this.room) {
-                this.renderSingle(newItem);
-                UI.toast('Yeni veri geldi', 'success');
+    bindEvents: function() {
+        const vp = document.getElementById('viewport');
+        
+        vp.onmousedown = e => {
+            if(e.button === 0) {
+                this.drag.active = true;
+                this.drag.x = e.clientX; this.drag.y = e.clientY;
             }
-        } else if (eventType === 'DELETE') {
-            const el = document.getElementById(`item-${oldItem.id}`);
-            if(el) {
-                el.style.transform = "scale(0)";
-                setTimeout(() => el.remove(), 200);
-            }
-        } else if (eventType === 'UPDATE') {
-            // Eğer oda değişmediyse güncelle, yoksa kaldır/ekle
-            if(newItem.room_id === this.room) {
-                const el = document.getElementById(`item-${newItem.id}`);
-                if(el) el.outerHTML = this.createHTML(newItem); // Basitçe yeniden çiz
-                else this.renderSingle(newItem);
-            } else {
-                const el = document.getElementById(`item-${newItem.id}`);
-                if(el) el.remove(); // Başka odaya gittiyse kaldır
-            }
-        }
-        
-        // Admin açıksa istatistikleri güncelle
-        if(Admin.isLogged()) Admin.fetchStats();
-    },
-
-    // --- DATA ---
-    loadRoom: async function(roomName) {
-        this.room = roomName;
-        document.getElementById('room-title').innerText = roomName.toUpperCase();
-        document.getElementById('back-home').style.display = roomName === 'main' ? 'none' : 'block';
-        document.getElementById('camera').innerHTML = ''; // Temizle
-        
-        const { data } = await this.db.from('items').select('*').eq('room_id', roomName);
-        this.items = data || [];
-        this.items.forEach(item => this.renderSingle(item));
-
-        if(roomName !== 'main') {
-            this.state.x = (window.innerWidth/2) - 100000;
-            this.state.y = (window.innerHeight/2) - 100000;
-            this.updateCam();
-        } else {
-            this.centerCam();
-        }
-        
-        if(Admin.isLogged()) Admin.fetchStats();
-    },
-
-    renderSingle: function(item) {
-        const el = document.createElement('div');
-        el.outerHTML = this.createHTML(item);
-        document.getElementById('camera').appendChild(document.getElementById(`item-${item.id}`) || el); // Hacky insert
-        // createHTML string döndürdüğü için DOM'a ekleme farklı yapılmalı:
-        const temp = document.createElement('div');
-        temp.innerHTML = this.createHTML(item);
-        const newNode = temp.firstElementChild;
-        document.getElementById('camera').appendChild(newNode);
-    },
-
-    createHTML: function(item) {
-        const isAdmin = Admin.isLogged();
-        const reportClass = item.is_reported ? 'is-reported' : '';
-        const actions = `
-            <span class="action-icon icon-flag" onclick="event.stopPropagation(); App.report(${item.id})">🚩</span>
-            ${isAdmin ? `<span class="action-icon icon-del" onclick="event.stopPropagation(); Admin.delete(${item.id})">🗑️</span>` : ''}
-        `;
-        
-        const onclick = item.type === 'library' ? `onclick="App.teleport('${item.title}')"` : '';
-
-        return `
-            <div id="item-${item.id}" class="entity type-${item.type} ${reportClass}" 
-                 style="left:${item.x}px; top:${item.y}px" ${onclick}>
-                <h3>
-                    <span>${item.title}</span>
-                    <div style="display:flex">${actions}</div>
-                </h3>
-                <p>${item.content}</p>
-            </div>
-        `;
-    },
-
-    saveItem: async function() {
-        const title = document.getElementById('inp-title').value;
-        const content = document.getElementById('inp-content').value;
-        if(!title || !content) return UI.toast('Alanları doldurun!', 'error');
-
-        const { error } = await this.db.from('items').insert([{
-            title, content, type: this.state.type, room_id: this.room,
-            x: this.state.createPos.x, y: this.state.createPos.y
-        }]);
-
-        if(error) UI.toast(error.message, 'error');
-        else {
-            document.getElementById('input-modal').style.display = 'none';
-            document.getElementById('inp-title').value = '';
-            document.getElementById('inp-content').value = '';
-        }
-    },
-
-    report: function(id) {
-        UI.confirm("Bu içeriği raporlamak istiyor musun?", async () => {
-            await this.db.from('items').update({ is_reported: true }).eq('id', id);
-            UI.toast('Yöneticilere bildirildi.', 'success');
-        });
-    },
-
-    teleport: function(room) {
-        document.getElementById('viewport').style.filter = "blur(10px) brightness(0)";
-        setTimeout(() => {
-            this.loadRoom(room);
-            document.getElementById('viewport').style.filter = "none";
-        }, 500);
-    },
-
-    // --- INPUT & CAMERA ---
-    setupInput: function() {
-        const cam = document.getElementById('camera');
-        const view = document.getElementById('viewport');
-        
-        view.onmousedown = e => {
-            if(e.button===0) { this.state.drag=true; this.state.last={x:e.clientX, y:e.clientY}; }
         };
-        window.onmouseup = () => this.state.drag = false;
-        window.onmousemove = e => {
-            if(this.state.drag) {
-                this.state.x += e.clientX - this.state.last.x;
-                this.state.y += e.clientY - this.state.last.y;
-                this.state.last = {x:e.clientX, y:e.clientY};
+        window.onmouseup = () => this.drag.active = false;
+        
+        vp.onmousemove = e => {
+            if(this.drag.active) {
+                this.cam.x += e.clientX - this.drag.x;
+                this.cam.y += e.clientY - this.drag.y;
+                this.drag.x = e.clientX; this.drag.y = e.clientY;
                 this.updateCam();
             }
-            // HUD Update
-            const r = cam.getBoundingClientRect();
-            const wx = Math.round((e.clientX - r.left)/this.state.scale);
-            const wy = Math.round((e.clientY - r.top)/this.state.scale);
-            document.getElementById('hud-xy').innerText = `${wx}, ${wy}`;
+            // Koordinat göstergesi
+            const r = document.getElementById('camera').getBoundingClientRect();
+            const wx = Math.round((e.clientX - r.left) / this.cam.z);
+            const wy = Math.round((e.clientY - r.top) / this.cam.z);
+            document.getElementById('coords').innerText = `${wx}, ${wy}`;
         };
-        view.onwheel = e => {
+
+        vp.onwheel = e => {
             e.preventDefault();
-            const ds = e.deltaY > 0 ? -0.1 : 0.1;
-            const ns = Math.min(Math.max(0.1, this.state.scale + ds), 3);
-            this.state.x = (window.innerWidth/2) - ((window.innerWidth/2) - this.state.x) * (ns/this.state.scale);
-            this.state.y = (window.innerHeight/2) - ((window.innerHeight/2) - this.state.y) * (ns/this.state.scale);
-            this.state.scale = ns;
+            const s = e.deltaY > 0 ? 0.9 : 1.1;
+            this.cam.z = Math.min(Math.max(0.2, this.cam.z * s), 3);
             this.updateCam();
         };
-        view.oncontextmenu = e => {
+
+        vp.oncontextmenu = e => {
             e.preventDefault();
-            const r = cam.getBoundingClientRect();
-            this.state.createPos = {
-                x: Math.round((e.clientX - r.left)/this.state.scale),
-                y: Math.round((e.clientY - r.top)/this.state.scale)
+            const r = document.getElementById('camera').getBoundingClientRect();
+            // Kritik düzeltme: Tıklanan yerin sanal koordinatını kaydet
+            this.clickPos = {
+                x: Math.round((e.clientX - r.left) / this.cam.z),
+                y: Math.round((e.clientY - r.top) / this.cam.z)
             };
             const m = document.getElementById('ctx');
             m.style.display = 'block'; m.style.left = e.clientX+'px'; m.style.top = e.clientY+'px';
         };
-        window.onclick = () => document.getElementById('ctx').style.display='none';
-    },
-    
-    updateCam: function() {
-        document.getElementById('camera').style.transform = `translate(${this.state.x}px, ${this.state.y}px) scale(${this.state.scale})`;
-        document.getElementById('hud-z').innerText = Math.round(this.state.scale*100) + '%';
-    },
-    
-    centerCam: function() {
-        this.state.scale = 0.8;
-        this.state.x = -(CONFIG.LIMIT * 0.8) + (window.innerWidth/2);
-        this.state.y = -(CONFIG.LIMIT * 0.8) + (window.innerHeight/2);
-        this.updateCam();
-    },
-
-    openCreate: function(type) {
-        this.state.type = type;
-        document.getElementById('input-modal').style.display = 'flex';
-        document.getElementById('inp-title').focus();
-    }
-};
-
-// --- ADMIN SYSTEM ---
-const Admin = {
-    isLogged: () => localStorage.getItem('pro_admin') === 'true',
-    
-    toggle: function() {
-        if(this.isLogged()) {
-            document.getElementById('admin-panel').classList.toggle('open');
-            this.fetchStats();
-        } else {
-            UI.promptPass((pass) => {
-                if(pass === CONFIG.PASS) {
-                    localStorage.setItem('pro_admin', 'true');
-                    UI.toast('Yönetici yetkileri verildi', 'success');
-                    this.enableUI();
-                    location.reload(); // UI elementlerini inject etmek için hızlı reload
-                } else {
-                    UI.toast('Hatalı Şifre', 'error');
-                }
-            });
-        }
-    },
-
-    enableUI: function() {
-        document.getElementById('admin-trigger').classList.add('is-admin');
-    },
-
-    logout: function() {
-        localStorage.removeItem('pro_admin');
-        location.reload();
-    },
-
-    fetchStats: async function() {
-        if(!document.getElementById('admin-panel').classList.contains('open')) return;
         
-        // Count All
-        const { count } = await App.db.from('items').select('*', { count: 'exact', head: true });
-        document.getElementById('stat-total').innerText = count || 0;
-
-        // Fetch Reported
-        const { data } = await App.db.from('items').select('*').eq('is_reported', true);
-        document.getElementById('stat-reported').innerText = data?.length || 0;
-        
-        this.renderReports(data || []);
-    },
-
-    renderReports: function(list) {
-        const cont = document.getElementById('report-container');
-        cont.innerHTML = '';
-        if(list.length === 0) cont.innerHTML = '<div style="text-align:center;color:#444;margin-top:20px">Temiz</div>';
-        
-        list.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'report-item';
-            div.innerHTML = `
-                <div style="font-weight:bold; color:white; font-size:12px">${item.title}</div>
-                <div style="font-size:10px; color:#666; margin-bottom:5px">${item.content.substring(0,30)}...</div>
-                <div class="report-actions">
-                    <button class="mini-btn btn-del" onclick="Admin.delete(${item.id})">SİL</button>
-                    <button class="mini-btn btn-ignore" onclick="Admin.ignore(${item.id})">KALDIR</button>
-                    <button class="mini-btn" style="background:var(--p); color:black" onclick="Admin.goto(${item.x}, ${item.y}, '${item.room_id}')">GİT</button>
-                </div>
-            `;
-            cont.appendChild(div);
-        });
-    },
-
-    delete: function(id) {
-        UI.confirm("Kalıcı olarak silinsin mi?", async () => {
-            await App.db.from('items').delete().eq('id', id);
-            UI.toast('Obje evrenden silindi.', 'success');
-        });
-    },
-
-    ignore: async function(id) {
-        await App.db.from('items').update({ is_reported: false }).eq('id', id);
-        this.fetchStats();
-    },
-
-    goto: function(x, y, room) {
-        if(App.room !== room) App.loadRoom(room);
-        // Kamerayı oraya odakla
-        App.state.x = (window.innerWidth/2) - (x * App.state.scale);
-        App.state.y = (window.innerHeight/2) - (y * App.state.scale);
-        App.updateCam();
-    },
-    
-    refresh: function() { this.fetchStats(); }
-};
-
-// --- UI HELPERS ---
-const UI = {
-    toast: function(msg, type='success') {
-        const t = document.createElement('div');
-        t.className = `toast ${type}`;
-        t.innerHTML = `<span style="font-size:16px">${type==='success'?'✔':'✖'}</span> ${msg}`;
-        document.getElementById('toast-container').appendChild(t);
-        setTimeout(() => t.classList.add('show'), 10);
-        setTimeout(() => { t.classList.remove('show'); setTimeout(()=>t.remove(),300); }, 3000);
-    },
-
-    confirm: function(msg, callback) {
-        const m = document.getElementById('confirm-modal');
-        const inp = document.getElementById('c-input');
-        const btn = document.getElementById('c-yes-btn');
-        const txt = document.getElementById('c-msg');
-        
-        inp.style.display = 'none';
-        txt.innerText = msg;
-        m.style.display = 'flex';
-        
-        btn.onclick = () => {
-            m.style.display = 'none';
-            callback();
+        window.onclick = e => {
+            if(!e.target.closest('#ctx')) document.getElementById('ctx').style.display = 'none';
         };
     },
 
-    promptPass: function(callback) {
-        const m = document.getElementById('confirm-modal');
-        const inp = document.getElementById('c-input');
-        const btn = document.getElementById('c-yes-btn');
-        const txt = document.getElementById('c-msg');
-
-        txt.innerText = "YÖNETİCİ ŞİFRESİ";
-        inp.style.display = 'block';
-        inp.value = '';
-        m.style.display = 'flex';
-        inp.focus();
-
-        const submit = () => { m.style.display='none'; callback(inp.value); };
-        btn.onclick = submit;
-        inp.onkeydown = (e) => { if(e.key === 'Enter') submit(); };
+    updateCam: function() {
+        document.getElementById('camera').style.transform = 
+            `translate(${this.cam.x}px, ${this.cam.y}px) scale(${this.cam.z})`;
     },
 
-    closeConfirm: function() {
-        document.getElementById('confirm-modal').style.display = 'none';
+    centerCam: function() {
+        // Ekranın tam ortasını (0,0) noktasına hizala
+        this.cam.x = window.innerWidth / 2;
+        this.cam.y = window.innerHeight / 2;
+        this.cam.z = 1;
+        this.updateCam();
+    },
+
+    loadRoom: async function(roomId) {
+        this.room = roomId;
+        document.getElementById('room-name').innerText = roomId === 'main' ? 'ANA EVREN' : roomId;
+        document.getElementById('btn-back').style.display = roomId === 'main' ? 'none' : 'block';
+        
+        // Sahneyi temizle
+        document.getElementById('entities').innerHTML = '';
+        this.centerCam(); // Her oda değişiminde merkeze spawn ol
+
+        const { data } = await DB.from('items').select('*').eq('room_id', roomId);
+        this.items = data || [];
+        this.items.forEach(item => this.renderItem(item));
+        
+        if(document.body.classList.contains('is-admin')) Admin.fetchReports();
+    },
+
+    renderItem: function(item) {
+        // Aynı ID varsa tekrar ekleme
+        if(document.getElementById(`i-${item.id}`)) return;
+
+        const el = document.createElement('div');
+        el.id = `i-${item.id}`;
+        el.className = `entity type-${item.type} ${item.is_reported ? 'is-reported' : ''}`;
+        el.style.left = item.x + 'px'; el.style.top = item.y + 'px';
+        
+        // HTML İçeriği
+        let html = `<h3>${item.title} 
+            <div>
+                <span style="cursor:pointer" onclick="event.stopPropagation(); Game.report(${item.id})">🚩</span>
+                <span class="admin-only" style="cursor:pointer; color:red; margin-left:5px" onclick="event.stopPropagation(); Admin.del(${item.id})">🗑️</span>
+            </div>
+        </h3><p>${item.content}</p>`;
+        
+        el.innerHTML = html;
+        if(item.type === 'library') {
+            el.onclick = () => this.loadRoom(item.title);
+        }
+        
+        document.getElementById('entities').appendChild(el);
+    },
+
+    save: async function() {
+        const t = document.getElementById('inp-t').value;
+        const c = document.getElementById('inp-c').value;
+        if(!t || !c) return alert("Boş bırakma!");
+        
+        const { error } = await DB.from('items').insert([{
+            title: t, content: c, type: this.inputType, 
+            x: this.clickPos.x, y: this.clickPos.y, // Doğru koordinat kullanılıyor
+            room_id: this.room
+        }]);
+
+        if(error) alert(error.message);
+        else UI.closeModals();
+    },
+
+    report: async function(id) {
+        if(confirm('Raporla?')) {
+            await DB.from('items').update({ is_reported: true }).eq('id', id);
+            alert('Bildirildi.');
+        }
+    },
+
+    handleLive: function(payload) {
+        const { eventType, new: newItem, old: oldItem } = payload;
+        
+        if(eventType === 'DELETE') {
+            const el = document.getElementById(`i-${oldItem.id}`);
+            if(el) el.remove();
+            if(document.body.classList.contains('is-admin')) Admin.fetchReports();
+        } 
+        else if(eventType === 'INSERT') {
+            if(newItem.room_id === this.room) this.renderItem(newItem);
+        }
+        else if(eventType === 'UPDATE') {
+            if(newItem.is_reported && document.body.classList.contains('is-admin')) Admin.fetchReports();
+            if(newItem.room_id === this.room) {
+                 // Basit güncelleme: sil ve tekrar yap
+                 const el = document.getElementById(`i-${newItem.id}`);
+                 if(el) el.remove();
+                 this.renderItem(newItem);
+            }
+        }
     }
 };
 
-// --- BAŞLAT ---
-App.init();
+// --- ADMIN SISTEMI ---
+const Admin = {
+    toggle: function() {
+        if(document.body.classList.contains('is-admin')) {
+            document.body.classList.toggle('panel-open');
+            this.fetchReports();
+        } else {
+            document.getElementById('modal-pass').style.display = 'flex';
+        }
+    },
 
+    login: function() {
+        const p = document.getElementById('inp-pass').value;
+        if(p === CFG.PASS) {
+            localStorage.setItem('isAdmin', 'true');
+            location.reload(); // UI güncellemesi için reload
+        } else {
+            alert('Yanlış!');
+        }
+    },
+
+    logout: function() {
+        localStorage.removeItem('isAdmin');
+        location.reload();
+    },
+
+    fetchReports: async function() {
+        const { data } = await DB.from('items').select('*').eq('is_reported', true);
+        const list = document.getElementById('report-list');
+        list.innerHTML = '';
+        if(!data || data.length === 0) list.innerHTML = '<small>Temiz</small>';
+        
+        data.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'report-item';
+            div.innerHTML = `
+                <div style="font-weight:bold">${item.title}</div>
+                <button class="adm-btn" onclick="Admin.del(${item.id})">SİL</button>
+                <button class="adm-btn" style="background:#444" onclick="Admin.goto('${item.room_id}', ${item.x}, ${item.y})">GİT</button>
+                <button class="adm-btn" style="background:green" onclick="Admin.clear(${item.id})">TEMİZLE</button>
+            `;
+            list.appendChild(div);
+        });
+    },
+
+    del: async function(id) {
+        if(confirm('Sil?')) await DB.from('items').delete().eq('id', id);
+    },
+    
+    clear: async function(id) {
+        await DB.from('items').update({ is_reported: false }).eq('id', id);
+        this.fetchReports();
+    },
+    
+    goto: function(room, x, y) {
+        Game.loadRoom(room);
+        // Kamerayı oraya odakla
+        setTimeout(() => {
+            Game.cam.x = (window.innerWidth/2) - x;
+            Game.cam.y = (window.innerHeight/2) - y;
+            Game.updateCam();
+        }, 100);
+    }
+};
+
+// --- UI YARDIMCILARI ---
+const UI = {
+    openInput: function(type) {
+        Game.inputType = type;
+        document.getElementById('modal-input').style.display = 'flex';
+        document.getElementById('inp-t').value = '';
+        document.getElementById('inp-c').value = '';
+        document.getElementById('inp-t').focus();
+    },
+    closeModals: function() {
+        document.querySelectorAll('.modal').forEach(m => m.style.display='none');
+    }
+};
+
+// Başlat
+Game.init();
+
+// Enter tuşu desteği
+document.getElementById('inp-pass').addEventListener('keydown', e => { if(e.key==='Enter') Admin.login(); });
 </script>
 </body>
 </html>
