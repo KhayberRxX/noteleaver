@@ -3,11 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>META-ENGINE V8 | PRO-EDITION</title>
-    <link rel="stylesheet" href="style.css">
+    <title>META-ENGINE V10 | ULTIMATE RECOVERY</title>
+    
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;800&family=Plus+Jakarta+Sans:wght@300;400;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --neon: #00ff88; --bg: #050505; --ui-bg: rgba(20, 20, 20, 0.9);
+            --border: rgba(255, 255, 255, 0.1); --font: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body, html { 
+            width: 100%; height: 100%; 
+            background: var(--bg); color: white; 
+            font-family: var(--font); overflow: hidden; 
+        }
+
+        /* DÜNYA VE KAMERA */
+        #viewport { 
+            width: 100vw; height: 100vh; 
+            position: relative; overflow: hidden; 
+            cursor: grab; z-index: 1;
+        }
+        #viewport:active { cursor: grabbing; }
+
+        #camera { 
+            position: absolute; width: 0; height: 0; 
+            transform-origin: center; will-change: transform;
+            pointer-events: none; /* Kamera katmanı tıklamayı engellememeli */
+        }
+
+        #grid-bg {
+            position: absolute; width: 100000px; height: 100000px; 
+            left: -50000px; top: -50000px;
+            background-image: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 50px; z-index: -1;
+        }
+
+        #entities-layer { position: absolute; pointer-events: auto; }
+
+        /* OBJELER (NOTLAR) */
+        .entity {
+            position: absolute; width: 250px; background: var(--ui-bg); 
+            border: 1px solid var(--border); border-radius: 12px; padding: 15px;
+            backdrop-filter: blur(10px); pointer-events: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: border-color 0.3s;
+        }
+        .entity:hover { border-color: var(--neon); }
+        .entity h4 { color: var(--neon); font-family: 'JetBrains Mono'; margin-bottom: 8px; display: flex; justify-content: space-between; }
+        .entity p { font-size: 13px; color: #ccc; line-height: 1.5; }
+        .library { border-left: 4px solid #00d4ff; cursor: pointer; }
+
+        /* HUD (UI) */
+        #hud { 
+            position: fixed; inset: 0; pointer-events: none; 
+            z-index: 100; padding: 25px; 
+        }
+        .hud-content { display: flex; justify-content: space-between; align-items: flex-end; height: 100%; }
+        
+        .stat-box { 
+            pointer-events: auto; background: var(--ui-bg); 
+            border: 1px solid var(--border); padding: 10px 20px; 
+            border-radius: 10px; font-family: 'JetBrains Mono'; font-size: 12px;
+        }
+        
+        #admin-btn {
+            pointer-events: auto; width: 45px; height: 45px; 
+            background: var(--ui-bg); border: 1px solid var(--border);
+            border-radius: 50%; display: flex; align-items: center; 
+            justify-content: center; cursor: pointer; color: var(--neon);
+        }
+
+        /* MODAL */
+        #modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+            display: none; align-items: center; justify-content: center;
+            z-index: 1000; pointer-events: auto;
+        }
+        .modal { background: #111; padding: 30px; border-radius: 15px; width: 350px; border: 1px solid var(--neon); }
+        input, textarea { width: 100%; background: #000; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 10px; border-radius: 8px; }
+        .btn { width: 100%; padding: 12px; background: var(--neon); border: none; font-weight: bold; border-radius: 8px; cursor: pointer; color: black; }
+    </style>
 </head>
 <body>
 
@@ -15,60 +95,149 @@
         <div id="camera">
             <div id="grid-bg"></div>
             <div id="entities-layer"></div>
-            <div id="players-layer"></div>
         </div>
     </div>
 
     <div id="hud">
-        <div class="hud-top">
-            <div class="logo">META-ENGINE <span id="room-name">MAIN_FRAME</span></div>
-            <button id="btn-back" class="hidden" onclick="App.changeRoom('main')">← ANA MERKEZ</button>
-        </div>
-
-        <div class="hud-bottom">
-            <div class="stat-card">
-                <i class="fa-solid fa-signal pulse"></i>
-                <div class="stat-info">
-                    <span id="stat-online">0</span>
-                    <label>AKTİF KULLANICI</label>
-                </div>
+        <div style="pointer-events: auto; font-weight: 800;">META-ENGINE <span id="room-id" style="color:var(--neon)">MAIN</span></div>
+        <div class="hud-content">
+            <div class="stat-box">
+                POS: <span id="coords">0,0</span> | 
+                ONLINE: <span id="online">0</span>
             </div>
-            <div class="stat-card">
-                <i class="fa-solid fa-location-arrow"></i>
-                <div class="stat-info">
-                    <span id="stat-coords">0, 0</span>
-                    <label>KOORDİNAT</label>
-                </div>
-            </div>
-            <div id="cooldown-container">
-                <div id="cooldown-bar"></div>
-                <span id="cooldown-text">SİSTEM HAZIR</span>
-            </div>
-        </div>
-
-        <div id="admin-gate" onclick="Admin.toggle()">
-            <i class="fa-solid fa-user-shield"></i>
-        </div>
-    </div>
-
-    <div id="admin-panel" class="side-panel">
-        <div class="panel-header">ADMIN_CONSOLE <i class="fa-solid fa-xmark" onclick="Admin.toggle()"></i></div>
-        <div class="panel-body">
-            <div class="admin-stat-grid">
-                <div class="a-stat"><b>TOPLAM</b><span id="adm-total">0</span></div>
-                <div class="a-stat red"><b>RAPOR</b><span id="adm-reports">0</span></div>
-            </div>
-            <h3>AKTİF GEZGİNLER</h3>
-            <div id="adm-user-list"></div>
-            <h3>ACİL RAPORLAR</h3>
-            <div id="adm-report-list"></div>
+            <div id="admin-btn" onclick="Admin.init()"><i class="fa-solid fa-shield-halved"></i></div>
         </div>
     </div>
 
     <div id="modal-overlay">
-        <div id="modal-box"></div>
+        <div class="modal">
+            <h3 style="margin-bottom:15px">YENİ NOT BIRAK</h3>
+            <input id="title" placeholder="Başlık">
+            <textarea id="content" rows="4" placeholder="Mesajınız..."></textarea>
+            <select id="type" style="width:100%; background:#000; color:white; padding:10px; margin-bottom:10px; border-radius:8px; border:1px solid #333;">
+                <option value="note">Düz Not</option>
+                <option value="library">Kütüphane (Oda)</option>
+            </select>
+            <button class="btn" onclick="Engine.save()">DÜNYAYA EKLE</button>
+            <button class="btn" style="background:none; color:white; margin-top:5px" onclick="Engine.closeModal()">İPTAL</button>
+        </div>
     </div>
 
-    <script src="app.js"></script>
+    <script>
+        const SB_URL = "https://ssfgvjudifodfhovhpzx.supabase.co";
+        const SB_KEY = "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo";
+        const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+
+        const Engine = {
+            room: 'main',
+            camX: window.innerWidth / 2,
+            camY: window.innerHeight / 2,
+            zoom: 1,
+            isDragging: false,
+            hasMoved: false,
+            startX: 0, startY: 0,
+            mouseWorld: { x: 0, y: 0 },
+
+            async init() {
+                this.bindEvents();
+                await this.loadRoom('main');
+                this.setupRealtime();
+                this.render();
+            },
+
+            bindEvents() {
+                window.addEventListener('mousedown', (e) => {
+                    if(e.target.closest('.stat-box') || e.target.closest('#admin-btn') || e.target.closest('.modal')) return;
+                    this.isDragging = true;
+                    this.hasMoved = false;
+                    this.startX = e.clientX - this.camX;
+                    this.startY = e.clientY - this.camY;
+                });
+
+                window.addEventListener('mousemove', (e) => {
+                    if (this.isDragging) {
+                        this.hasMoved = true;
+                        this.camX = e.clientX - this.startX;
+                        this.camY = e.clientY - this.startY;
+                        this.render();
+                    }
+                    this.mouseWorld.x = Math.round((e.clientX - this.camX) / this.zoom);
+                    this.mouseWorld.y = Math.round((e.clientY - this.camY) / this.zoom);
+                    document.getElementById('coords').innerText = `${this.mouseWorld.x},${this.mouseWorld.y}`;
+                });
+
+                window.addEventListener('mouseup', (e) => {
+                    if (this.isDragging && !this.hasMoved) {
+                        document.getElementById('modal-overlay').style.display = 'flex';
+                    }
+                    this.isDragging = false;
+                });
+
+                window.addEventListener('wheel', (e) => {
+                    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                    this.zoom = Math.min(Math.max(0.3, this.zoom * delta), 3);
+                    this.render();
+                });
+            },
+
+            render() {
+                document.getElementById('camera').style.transform = `translate(${this.camX}px, ${this.camY}px) scale(${this.zoom})`;
+            },
+
+            async loadRoom(id) {
+                this.room = id;
+                document.getElementById('room-id').innerText = id.toUpperCase();
+                const { data, error } = await supabaseClient.from('items').select('*').eq('room_id', id);
+                if (data) this.drawItems(data);
+            },
+
+            drawItems(items) {
+                const layer = document.getElementById('entities-layer');
+                layer.innerHTML = '';
+                items.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = `entity ${item.type}`;
+                    div.style.left = item.x + 'px';
+                    div.style.top = item.y + 'px';
+                    div.innerHTML = `<h4>${item.title}</h4><p>${item.content}</p>`;
+                    if(item.type === 'library') {
+                        div.onclick = (e) => { e.stopPropagation(); this.loadRoom(item.title); };
+                    }
+                    layer.appendChild(div);
+                });
+            },
+
+            setupRealtime() {
+                supabaseClient.channel('any').on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => {
+                    this.loadRoom(this.room);
+                }).subscribe();
+            },
+
+            async save() {
+                const t = document.getElementById('title').value;
+                const c = document.getElementById('content').value;
+                const type = document.getElementById('type').value;
+                if(!t || !c) return;
+
+                await supabaseClient.from('items').insert([{
+                    title: t, content: c, type: type, 
+                    x: this.mouseWorld.x, y: this.mouseWorld.y, 
+                    room_id: this.room
+                }]);
+                this.closeModal();
+            },
+
+            closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+        };
+
+        const Admin = {
+            init() {
+                const p = prompt("ADMIN PASS:");
+                if(p === "Hasan024") alert("Admin yetkisi aktif (Geliştirme aşamasında)");
+            }
+        };
+
+        window.onload = () => Engine.init();
+    </script>
 </body>
 </html>
