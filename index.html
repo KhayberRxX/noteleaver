@@ -2,232 +2,715 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>META-ENGINE V14 | PRO & GOD MODE</title>
-    
+    <title>META-ENGINE | PRO KONSOL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;800&family=Plus+Jakarta+Sans:wght@300;400;700&display=swap" rel="stylesheet">
-
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;500;800&family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        :root { --p: #00ff88; --bg: #030303; --ui: rgba(10, 10, 10, 0.98); --brd: rgba(255, 255, 255, 0.08); }
-        * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
-        body { background: var(--bg); color: white; font-family: 'Plus Jakarta Sans', sans-serif; overflow: hidden; user-select: none; }
+        /* --- CORE THEME & RESET --- */
+        :root {
+            --bg-dark: #050505;
+            --bg-panel: rgba(15, 15, 15, 0.95);
+            --primary: #00ff9d;
+            --primary-dim: rgba(0, 255, 157, 0.1);
+            --accent: #00d0ff;
+            --danger: #ff2a2a;
+            --danger-dim: rgba(255, 42, 42, 0.1);
+            --text-main: #ffffff;
+            --text-mute: #888888;
+            --border: rgba(255, 255, 255, 0.08);
+            --font-ui: 'Inter', sans-serif;
+            --font-code: 'JetBrains Mono', monospace;
+            --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        }
 
-        /* ENGINE CANVAS */
-        #viewport { width: 100vw; height: 100vh; position: relative; overflow: hidden; cursor: crosshair; }
-        #camera { position: absolute; transform-origin: 0 0; will-change: transform; pointer-events: none; }
-        #grid { position: absolute; width: 400000px; height: 400000px; left: -200000px; top: -200000px; 
-                background-image: radial-gradient(rgba(255,255,255,0.05) 1.5px, transparent 1.5px); background-size: 60px 60px; }
+        * { box-sizing: border-box; outline: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; padding: 0; width: 100vw; height: 100vh; background: var(--bg-dark); color: var(--text-main); font-family: var(--font-ui); overflow: hidden; }
 
-        /* ENTITIES & PLAYER TRACKING */
-        .entity { position: absolute; width: 280px; background: var(--ui); border: 1px solid var(--brd); 
-                  border-radius: 12px; padding: 18px; backdrop-filter: blur(20px); pointer-events: auto; 
-                  box-shadow: 0 15px 45px rgba(0,0,0,0.8); transition: 0.3s cubic-bezier(0.19, 1, 0.22, 1); }
-        .entity:hover { border-color: var(--p); transform: translateY(-5px); box-shadow: 0 0 25px rgba(0,255,136,0.15); }
-        .entity h4 { color: var(--p); font-family: 'JetBrains Mono'; display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; }
-        .library { border-left: 4px solid #00d4ff; cursor: pointer; }
-        .del-icon { color: #ff4444; cursor: pointer; opacity: 0.6; transition: 0.2s; }
-        .del-icon:hover { opacity: 1; transform: scale(1.2); }
+        /* --- WORLD & CAMERA --- */
+        #viewport { position: absolute; inset: 0; overflow: hidden; cursor: crosshair; z-index: 1; }
+        #camera { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+        
+        #grid-layer {
+            position: absolute; left: -200000px; top: -200000px; width: 400000px; height: 400000px;
+            background-image: 
+                linear-gradient(var(--border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 100px 100px;
+            pointer-events: none; opacity: 0.3;
+        }
 
-        .player-phantom { position: absolute; width: 14px; height: 14px; background: var(--p); border-radius: 50%; 
-                          pointer-events: none; box-shadow: 0 0 15px var(--p); z-index: 1000; transition: 0.1s linear; }
-        .player-tag { position: absolute; transform: translate(18px, -8px); font-size: 11px; color: var(--p); 
-                       font-family: 'JetBrains Mono'; white-space: nowrap; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px; }
+        #origin-marker {
+            position: absolute; left: 0; top: 0; width: 0; height: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+        #origin-marker::after {
+            content: ''; width: 20px; height: 20px; border: 2px solid var(--primary);
+            border-radius: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 0 20px var(--primary);
+        }
 
-        /* HUD & NAVIGATION */
-        #hud { position: fixed; inset: 0; pointer-events: none; z-index: 2000; padding: 30px; }
-        .nav-bar { display: flex; justify-content: space-between; align-items: flex-start; }
-        .back-btn { background: #ff4444; color: white; border: none; padding: 8px 18px; border-radius: 8px; 
-                    cursor: pointer; font-weight: 800; pointer-events: auto; transition: 0.2s; font-family: 'JetBrains Mono'; }
-        .back-btn:hover { transform: scale(1.05); filter: brightness(1.2); }
+        /* --- ENTITIES (NOTLAR/KİTAPLAR) --- */
+        .entity {
+            position: absolute; width: 260px; padding: 20px;
+            background: var(--bg-panel); border: 1px solid var(--border);
+            border-radius: 12px; backdrop-filter: blur(10px);
+            transition: transform 0.2s var(--ease-out), box-shadow 0.2s;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            pointer-events: auto;
+        }
+        .entity:hover { transform: scale(1.02) translateY(-2px); border-color: var(--primary); z-index: 100; box-shadow: 0 15px 40px rgba(0,255,157,0.1); }
+        
+        .entity-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        .entity-title { font-family: var(--font-code); font-weight: 700; font-size: 13px; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; }
+        .entity-body { font-size: 14px; color: #ccc; line-height: 1.5; white-space: pre-wrap; font-weight: 400; user-select: text; }
+        
+        .type-library { border-left: 3px solid var(--accent); }
+        .type-library .entity-title { color: var(--accent); cursor: pointer; text-decoration: underline; }
+        
+        .is-reported { border: 1px solid var(--danger); animation: pulse-danger 2s infinite; }
+        @keyframes pulse-danger { 0% { box-shadow: 0 0 0 rgba(255, 42, 42, 0); } 50% { box-shadow: 0 0 20px rgba(255, 42, 42, 0.3); } 100% { box-shadow: 0 0 0 rgba(255, 42, 42, 0); } }
 
-        .stats-footer { position: absolute; bottom: 30px; left: 30px; display: flex; gap: 20px; pointer-events: auto; }
-        .stat-chip { background: var(--ui); border: 1px solid var(--brd); padding: 12px 20px; border-radius: 12px; 
-                     font-family: 'JetBrains Mono'; font-size: 12px; display: flex; flex-direction: column; }
-        .stat-chip label { font-size: 9px; opacity: 0.5; margin-bottom: 4px; text-transform: uppercase; }
+        .action-btn { background: transparent; border: none; color: var(--text-mute); cursor: pointer; transition: 0.2s; padding: 4px; }
+        .action-btn:hover { color: var(--text-main); transform: scale(1.1); }
+        .btn-flag:hover { color: var(--danger); }
+        .btn-del { color: var(--danger); opacity: 0.7; }
+        .btn-del:hover { opacity: 1; }
 
-        /* ADMIN CONSOLE */
-        #adm-panel { position: fixed; right: -360px; top: 0; width: 340px; height: 100vh; background: #080808; 
-                     border-left: 1px solid var(--brd); transition: 0.5s cubic-bezier(0.19, 1, 0.22, 1); 
-                     z-index: 3000; padding: 30px; pointer-events: auto; overflow-y: auto; }
-        #adm-panel.open { right: 0; }
-        .usr-card { background: #111; padding: 15px; border-radius: 10px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.03); }
-        .usr-card h5 { font-family: 'JetBrains Mono'; color: #888; margin-bottom: 8px; font-size: 11px; }
-        .tp-action { background: var(--p); color: black; border: none; width: 100%; padding: 8px; border-radius: 6px; 
-                     cursor: pointer; font-weight: 800; font-size: 12px; margin-top: 5px; }
+        /* --- HUD (HEADS UP DISPLAY) --- */
+        #ui-layer { position: fixed; inset: 0; pointer-events: none; z-index: 500; }
+        .hud-element { pointer-events: auto; }
+
+        /* Top Bar */
+        #top-bar { position: absolute; top: 0; left: 0; width: 100%; height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 30px; background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, transparent 100%); }
+        .room-indicator { font-family: var(--font-code); font-weight: 800; font-size: 20px; letter-spacing: 2px; color: var(--text-main); text-shadow: 0 0 20px rgba(255,255,255,0.2); }
+        .btn-home { background: var(--primary); color: #000; border: none; padding: 8px 16px; border-radius: 4px; font-weight: 700; font-family: var(--font-code); cursor: pointer; display: none; }
+        .btn-home:hover { background: #fff; box-shadow: 0 0 15px var(--primary); }
+
+        /* Bottom Stats */
+        #bottom-bar { position: absolute; bottom: 20px; left: 30px; display: flex; gap: 15px; }
+        .stat-pill { background: rgba(20,20,20,0.8); border: 1px solid var(--border); padding: 8px 16px; border-radius: 20px; font-family: var(--font-code); font-size: 11px; color: var(--text-mute); display: flex; align-items: center; gap: 8px; backdrop-filter: blur(5px); }
+        .stat-val { color: var(--primary); font-weight: bold; }
+        .live-dot { width: 8px; height: 8px; background: var(--primary); border-radius: 50%; box-shadow: 0 0 8px var(--primary); animation: blink 1s infinite alternate; }
+        @keyframes blink { from { opacity: 0.4; } to { opacity: 1; } }
+
+        /* Admin Trigger */
+        #admin-trigger { position: absolute; bottom: 20px; right: 30px; width: 44px; height: 44px; border-radius: 50%; background: rgba(20,20,20,0.8); border: 1px solid var(--border); color: var(--text-mute); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; z-index: 600; }
+        #admin-trigger:hover { color: var(--primary); border-color: var(--primary); box-shadow: 0 0 15px var(--primary-dim); }
+        body.is-admin #admin-trigger { color: var(--danger); border-color: var(--danger); box-shadow: 0 0 15px var(--danger-dim); }
+
+        /* --- ADMIN DASHBOARD --- */
+        #admin-dash {
+            position: absolute; top: 0; right: -420px; width: 400px; height: 100vh;
+            background: rgba(10, 10, 10, 0.98); border-left: 1px solid var(--border);
+            backdrop-filter: blur(20px); transition: right 0.4s var(--ease-out);
+            padding: 30px; display: flex; flex-direction: column; z-index: 2000;
+        }
+        body.dash-open #admin-dash { right: 0; }
+        
+        .dash-header { font-family: var(--font-code); font-size: 18px; font-weight: 800; color: var(--text-main); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 15px; }
+        .dash-section-title { font-size: 11px; color: var(--text-mute); font-weight: 700; text-transform: uppercase; margin: 20px 0 10px 0; letter-spacing: 1px; }
+        
+        .report-card { background: rgba(255, 42, 42, 0.05); border: 1px solid var(--danger-dim); border-left: 2px solid var(--danger); padding: 12px; margin-bottom: 8px; border-radius: 4px; }
+        .report-info { font-size: 12px; color: var(--text-main); font-weight: 600; margin-bottom: 5px; }
+        .report-actions { display: flex; gap: 5px; margin-top: 8px; }
+        .dash-btn { flex: 1; background: #222; border: none; color: #fff; padding: 6px; font-size: 10px; font-weight: 700; cursor: pointer; border-radius: 3px; transition: 0.2s; }
+        .dash-btn:hover { background: #333; }
+        .dash-btn.danger { background: var(--danger); color: #000; }
+        .dash-btn.danger:hover { background: #ff5555; }
+
+        /* --- CUSTOM TOASTS --- */
+        #toast-area { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; z-index: 3000; pointer-events: none; }
+        .toast { background: #111; border: 1px solid var(--border); color: #fff; padding: 12px 24px; border-radius: 30px; font-size: 13px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.5); opacity: 0; transform: translateY(20px); transition: 0.3s var(--ease-out); display: flex; align-items: center; gap: 10px; }
+        .toast.visible { opacity: 1; transform: translateY(0); }
+        .toast.success { border-color: var(--primary); color: var(--primary); }
+        .toast.error { border-color: var(--danger); color: var(--danger); }
+
+        /* --- MODALS (NO ALERTS) --- */
+        #modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 4000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+        .modal-box { background: #111; border: 1px solid var(--border); padding: 30px; width: 400px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); transform: scale(0.9); opacity: 0; transition: 0.3s var(--ease-out); }
+        .modal-active .modal-box { transform: scale(1); opacity: 1; }
+        
+        .modal-title { font-family: var(--font-code); font-size: 16px; color: var(--text-main); margin: 0 0 15px 0; }
+        .modal-input { width: 100%; background: #050505; border: 1px solid #333; color: white; padding: 12px; margin-bottom: 12px; border-radius: 6px; font-family: var(--font-ui); font-size: 14px; transition: 0.2s; }
+        .modal-input:focus { border-color: var(--primary); }
+        
+        .modal-btns { display: flex; gap: 10px; margin-top: 10px; }
+        .m-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 12px; }
+        .m-confirm { background: var(--primary); color: #000; }
+        .m-cancel { background: #222; color: #888; }
+        .m-confirm:hover { box-shadow: 0 0 15px var(--primary-dim); }
+
+        /* --- CONTEXT MENU --- */
+        #ctx-menu { position: fixed; background: #111; border: 1px solid var(--border); padding: 6px; border-radius: 8px; width: 180px; display: none; z-index: 5000; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+        .ctx-item { padding: 10px 12px; font-size: 13px; color: #ccc; cursor: pointer; border-radius: 5px; display: flex; gap: 10px; align-items: center; transition: 0.1s; }
+        .ctx-item:hover { background: var(--primary); color: #000; }
+        .ctx-sep { height: 1px; background: #333; margin: 5px 0; }
+
+        /* Admin only elements */
+        .admin-view { display: none; }
+        body.is-admin .admin-view { display: block; }
     </style>
 </head>
 <body>
 
     <div id="viewport">
         <div id="camera">
-            <div id="grid"></div>
+            <div id="grid-layer"></div>
+            <div id="origin-marker"></div>
             <div id="entities-layer"></div>
-            <div id="players-layer"></div>
         </div>
     </div>
 
-    <div id="hud">
-        <div class="nav-bar">
-            <button id="exit-btn" class="back-btn" style="display:none" onclick="Engine.loadRoom('main')">← EXIT_LIBRARY</button>
-            <div style="font-family:'JetBrains Mono'; letter-spacing: 2px;">META_ENGINE <span id="val-room" style="color:var(--p)">MAIN</span></div>
+    <div id="ui-layer">
+        <div id="top-bar">
+            <div class="hud-element room-indicator" id="room-name">ANA EVREN</div>
+            <button class="hud-element btn-home" id="btn-home" onclick="Engine.enterRoom('main')">
+                <i class="fa-solid fa-house"></i> MERKEZ
+            </button>
         </div>
 
-        <div class="stats-footer">
-            <div class="stat-chip"><label>Identity</label><span id="val-id">...</span></div>
-            <div class="stat-chip"><label>Ping</label><span><span id="val-ping">0</span>ms</span></div>
-            <div class="stat-chip"><label>Coords</label><span id="val-coords">0, 0</span></div>
+        <div id="bottom-bar">
+            <div class="stat-pill"><div class="live-dot"></div> <span class="stat-val" id="online-count">1</span> ONLİNE</div>
+            <div class="stat-pill"><i class="fa-solid fa-location-crosshairs"></i> <span class="stat-val" id="coords-display">0, 0</span></div>
+            <div class="stat-pill"><i class="fa-solid fa-magnifying-glass"></i> <span class="stat-val" id="zoom-display">100%</span></div>
         </div>
 
-        <div id="adm-trigger" onclick="Admin.auth()" style="position:absolute; bottom:30px; right:30px; pointer-events:auto; cursor:pointer; opacity:0.3; transition:0.3s;">
-            <i class="fa-solid fa-ghost fa-2xl"></i>
+        <div class="hud-element" id="admin-trigger" onclick="Admin.togglePanel()">
+            <i class="fa-solid fa-gear"></i>
         </div>
     </div>
 
-    <div id="adm-panel">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
-            <h2 style="font-family:'JetBrains Mono'; color:var(--p);">ADMIN_SYS</h2>
-            <i class="fa-solid fa-xmark" onclick="Admin.close()" style="cursor:pointer"></i>
+    <div id="admin-dash" class="hud-element">
+        <div class="dash-header">
+            <span>SİSTEM KONSOLU</span>
+            <span style="font-size:12px; cursor:pointer" onclick="Admin.togglePanel()">[ KAPAT ]</span>
         </div>
-        <div id="usr-list"></div>
+        
+        <div class="dash-section-title">Durum</div>
+        <div style="display:flex; gap:10px; margin-bottom:20px">
+            <div style="flex:1; background:#111; padding:10px; text-align:center; border:1px solid var(--border); border-radius:4px">
+                <div style="font-size:20px; font-weight:800; color:var(--text-main)" id="stat-total">0</div>
+                <div style="font-size:10px; color:var(--text-mute)">OBJE</div>
+            </div>
+            <div style="flex:1; background:rgba(255,42,42,0.1); padding:10px; text-align:center; border:1px solid var(--danger-dim); border-radius:4px">
+                <div style="font-size:20px; font-weight:800; color:var(--danger)" id="stat-reported">0</div>
+                <div style="font-size:10px; color:var(--danger)">RAPOR</div>
+            </div>
+        </div>
+
+        <div class="dash-section-title" style="display:flex; justify-content:space-between">
+            <span>Rapor Akışı</span>
+            <span style="cursor:pointer; color:var(--primary)" onclick="Admin.refreshReports()"><i class="fa-solid fa-rotate"></i></span>
+        </div>
+        <div id="report-feed" style="flex:1; overflow-y:auto; padding-right:5px">
+            </div>
+
+        <button class="m-btn m-cancel" style="width:100%; margin-top:20px; color:var(--danger); border:1px solid var(--danger-dim)" onclick="Admin.logout()">
+            <i class="fa-solid fa-power-off"></i> YÖNETİCİ ÇIKIŞI
+        </button>
     </div>
 
-    <script>
-        const SB_URL = "https://ssfgvjudifodfhovhpzx.supabase.co";
-        const SB_KEY = "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo";
-        const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+    <div id="toast-area"></div>
 
-        const Engine = {
-            room: 'main',
-            cam: { x: window.innerWidth/2, y: window.innerHeight/2, z: 1 },
-            mouse: { x: 0, y: 0 },
-            uid: 'H-' + Math.floor(Math.random()*9999),
-            isAdmin: localStorage.getItem('isAdm') === 'true',
+    <div id="modal-overlay">
+        <div class="modal-box" id="modal-content">
+            </div>
+    </div>
 
-            async init() {
-                document.getElementById('val-id').innerText = this.uid;
-                this.bindEvents();
-                await this.loadRoom('main');
-                this.setupRealtime();
-                this.startPingMonitor();
-                this.render();
-            },
+    <div id="ctx-menu" class="hud-element">
+        <div class="ctx-item" onclick="UI.openCreateModal('note')"><i class="fa-regular fa-note-sticky"></i> Not Bırak</div>
+        <div class="ctx-item" onclick="UI.openCreateModal('library')"><i class="fa-solid fa-book-journal-whills"></i> Kütüphane Kur</div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item" style="color:var(--text-mute); font-size:11px; cursor:default">
+            Koordinat: <span id="ctx-coords"></span>
+        </div>
+    </div>
 
-            bindEvents() {
-                window.onmousedown = (e) => { 
-                    if(e.button === 0 && e.target.id === 'viewport') {
-                        this.isDrag = true; this.hasMoved = false;
-                        this.sx = e.clientX - this.cam.x; this.sy = e.clientY - this.cam.y;
-                    }
-                };
-                window.onmousemove = (e) => {
-                    if(this.isDrag) {
-                        this.hasMoved = true;
-                        this.cam.x = e.clientX - this.sx; this.cam.y = e.clientY - this.sy;
-                        this.render();
-                    }
-                    this.mouse.x = Math.round((e.clientX - this.cam.x) / this.cam.z);
-                    this.mouse.y = Math.round((e.clientY - this.cam.y) / this.cam.z);
-                    document.getElementById('val-coords').innerText = `${this.mouse.x}, ${this.mouse.y}`;
-                    this.broadcastPresence();
-                };
-                window.onmouseup = () => {
-                    if(this.isDrag && !this.hasMoved) this.promptCreate();
-                    this.isDrag = false;
-                };
-                window.onwheel = (e) => {
-                    const factor = e.deltaY > 0 ? 0.9 : 1.1;
-                    this.cam.z = Math.min(Math.max(0.2, this.cam.z * factor), 3);
-                    this.render();
-                };
-                window.oncontextmenu = (e) => e.preventDefault();
-            },
+<script>
+/**
+ * PROFESYONEL META-ENGINE v4.0
+ * Özellikler: Vector Camera, Realtime Sync, Presence, Admin Dashboard, Component UI
+ */
 
-            render() { document.getElementById('camera').style.transform = `translate(${this.cam.x}px, ${this.cam.y}px) scale(${this.cam.z})`; },
+const CONFIG = {
+    SB_URL: "https://ssfgvjudifodfhovhpzx.supabase.co",
+    SB_KEY: "sb_publishable_hBGvHNaGoHd_5cLAKVUhqA_N87pXWQo",
+    ADMIN_PASS: "Hasan024",
+    LIMITS: { MIN_ZOOM: 0.1, MAX_ZOOM: 4 }
+};
 
-            async loadRoom(rid) {
-                this.room = rid;
-                document.getElementById('val-room').innerText = rid.toUpperCase();
-                document.getElementById('exit-btn').style.display = rid === 'main' ? 'none' : 'block';
-                const { data } = await supabaseClient.from('items').select('*').eq('room_id', rid);
-                this.refreshEntities(data || []);
-            },
+const DB = supabase.createClient(CONFIG.SB_URL, CONFIG.SB_KEY);
 
-            refreshEntities(items) {
-                const layer = document.getElementById('entities-layer'); layer.innerHTML = '';
-                items.forEach(i => {
-                    const d = document.createElement('div');
-                    d.className = `entity ${i.type}`;
-                    d.style.left = i.x + 'px'; d.style.top = i.y + 'px';
-                    const adminTools = this.isAdmin ? `<i class="fa-solid fa-trash-can del-icon" onclick="Admin.removeItem('${i.id}')"></i>` : '';
-                    d.innerHTML = `<h4>${i.title} ${adminTools}</h4><p>${i.content}</p>`;
-                    if(i.type === 'library') d.onclick = () => this.loadRoom(i.title);
-                    layer.appendChild(d);
-                });
-            },
+// --- GLOBAL STATE ---
+const State = {
+    room: 'main',
+    userCount: 1,
+    cam: { x: 0, y: 0, z: 1 },
+    pointer: { x: 0, y: 0 }, // Ekran koordinatı
+    worldPointer: { x: 0, y: 0 }, // Dünya koordinatı
+    isDragging: false,
+    dragStart: { x: 0, y: 0 },
+    ctxPos: { x: 0, y: 0 }, // Sağ tık koordinatı (Dünya)
+    isAdmin: localStorage.getItem('meta_admin') === 'true'
+};
 
-            setupRealtime() {
-                const chan = supabaseClient.channel('world_v14', { config: { presence: { key: this.uid } } });
-                chan.on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, () => this.loadRoom(this.room))
-                    .on('presence', { event: 'sync' }, () => this.updatePhantoms(chan.presenceState()))
-                    .subscribe(async (s) => { if(s === 'SUBSCRIBED') await chan.track({ x: 0, y: 0, r: this.room }); });
-                this.chan = chan;
-            },
+// --- CORE ENGINE ---
+const Engine = {
+    init: async function() {
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        
+        Input.init();
+        Network.init();
+        
+        // Admin UI durumu
+        if(State.isAdmin) {
+            document.body.classList.add('is-admin');
+            Admin.fetchStats();
+        }
 
-            broadcastPresence() { if(this.chan) this.chan.track({ x: this.mouse.x, y: this.mouse.y, r: this.room }); },
+        // İlk Odayı Yükle
+        await this.enterRoom('main');
+        
+        // Başlangıç Animasyonu
+        UI.toast('Sistem Bağlandı', 'success');
+        this.animate();
+    },
 
-            updatePhantoms(state) {
-                const pLayer = document.getElementById('players-layer');
-                const uList = document.getElementById('usr-list');
-                pLayer.innerHTML = ''; uList.innerHTML = '';
-                for(let id in state) {
-                    const p = state[id][0];
-                    if(id !== this.uid && p.r === this.room) {
-                        pLayer.innerHTML += `<div class="player-phantom" style="left:${p.x}px; top:${p.y}px"><div class="player-tag">${id}</div></div>`;
-                    }
-                    if(this.isAdmin) {
-                        uList.innerHTML += `<div class="usr-card"><h5>ID: ${id} | Room: ${p.r}</h5><button class="tp-action" onclick="Admin.teleport(${p.x}, ${p.y}, '${p.r}')">TELEPORT</button></div>`;
-                    }
+    resize: function() {
+        State.viewport = { w: window.innerWidth, h: window.innerHeight };
+        // Merkeze hizala (eğer ilk açılışsa)
+        if(State.cam.x === 0 && State.cam.y === 0) {
+            State.cam.x = State.viewport.w / 2;
+            State.cam.y = State.viewport.h / 2;
+        }
+        this.render();
+    },
+
+    enterRoom: async function(roomId) {
+        // UI Temizliği
+        const layer = document.getElementById('entities-layer');
+        // Fade out efekti
+        layer.style.opacity = '0';
+        
+        setTimeout(async () => {
+            State.room = roomId;
+            document.getElementById('room-name').innerText = roomId === 'main' ? 'ANA EVREN' : roomId;
+            document.getElementById('btn-home').style.display = roomId === 'main' ? 'none' : 'block';
+            
+            // DOM Temizle
+            layer.innerHTML = '';
+            
+            // Kamerayı Sıfırla (Spawn Point)
+            State.cam.x = window.innerWidth / 2;
+            State.cam.y = window.innerHeight / 2;
+            State.cam.z = 1;
+
+            // Veriyi Çek
+            const { data } = await DB.from('items').select('*').eq('room_id', roomId);
+            if(data) data.forEach(item => Entity.create(item));
+
+            // Fade in
+            layer.style.opacity = '1';
+            Engine.render();
+            
+            if(State.isAdmin) Admin.fetchStats();
+        }, 200);
+    },
+
+    render: function() {
+        // CSS Transform ile Donanım Hızlandırmalı Render
+        const camEl = document.getElementById('camera');
+        camEl.style.transform = `translate3d(${State.cam.x}px, ${State.cam.y}px, 0) scale(${State.cam.z})`;
+        
+        // HUD Güncelle
+        document.getElementById('zoom-display').innerText = Math.round(State.cam.z * 100) + "%";
+        
+        // Grid'in sonsuz hissi vermesi için konumunu terse kaydır (Opsiyonel, basit tutuldu)
+    },
+
+    animate: function() {
+        requestAnimationFrame(() => Engine.animate());
+        // Buraya sürekli çalışacak animasyonlar eklenebilir
+    }
+};
+
+// --- INPUT HANDLING (PAN & ZOOM) ---
+const Input = {
+    init: function() {
+        const vp = document.getElementById('viewport');
+
+        vp.addEventListener('mousedown', e => {
+            if(e.button === 0) { // Sol tık
+                State.isDragging = true;
+                State.dragStart = { x: e.clientX - State.cam.x, y: e.clientY - State.cam.y };
+                vp.style.cursor = 'grabbing';
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            State.isDragging = false;
+            vp.style.cursor = 'crosshair';
+        });
+
+        vp.addEventListener('mousemove', e => {
+            State.pointer = { x: e.clientX, y: e.clientY };
+            
+            // Dünya koordinatını hesapla: (Mouse - CamOffset) / Zoom
+            const wx = Math.round((e.clientX - State.cam.x) / State.cam.z);
+            const wy = Math.round((e.clientY - State.cam.y) / State.cam.z);
+            State.worldPointer = { x: wx, y: wy };
+            document.getElementById('coords-display').innerText = `${wx}, ${wy}`;
+
+            if(State.isDragging) {
+                State.cam.x = e.clientX - State.dragStart.x;
+                State.cam.y = e.clientY - State.dragStart.y;
+                Engine.render();
+            }
+        });
+
+        vp.addEventListener('wheel', e => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const newZ = Math.min(Math.max(CONFIG.LIMITS.MIN_ZOOM, State.cam.z * delta), CONFIG.LIMITS.MAX_ZOOM);
+            
+            // Mouse imlecinin olduğu yere doğru zoom yapma matematiği
+            const mouseX = e.clientX;
+            const mouseY = e.clientY;
+            
+            State.cam.x = mouseX - (mouseX - State.cam.x) * (newZ / State.cam.z);
+            State.cam.y = mouseY - (mouseY - State.cam.y) * (newZ / State.cam.z);
+            State.cam.z = newZ;
+            
+            Engine.render();
+        }, { passive: false });
+
+        vp.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            // Tıklanan dünya koordinatını kaydet
+            State.ctxPos = { ...State.worldPointer };
+            
+            const menu = document.getElementById('ctx-menu');
+            menu.style.display = 'block';
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
+            document.getElementById('ctx-coords').innerText = `${State.ctxPos.x}, ${State.ctxPos.y}`;
+        });
+
+        window.addEventListener('click', e => {
+            if(!e.target.closest('#ctx-menu')) document.getElementById('ctx-menu').style.display = 'none';
+        });
+    }
+};
+
+// --- ENTITY MANAGER ---
+const Entity = {
+    create: function(data) {
+        if(document.getElementById(`ent-${data.id}`)) return; // Zaten varsa tekrar çizme
+
+        const el = document.createElement('div');
+        el.id = `ent-${data.id}`;
+        el.className = `entity type-${data.type} ${data.is_reported ? 'is-reported' : ''}`;
+        el.style.left = data.x + 'px';
+        el.style.top = data.y + 'px';
+        
+        const deleteBtn = State.isAdmin ? `<button class="action-btn btn-del" onclick="Admin.deleteItem(${data.id}, event)"><i class="fa-solid fa-trash"></i></button>` : '';
+
+        el.innerHTML = `
+            <div class="entity-header">
+                <span class="entity-title">${data.title}</span>
+                <div>
+                    <button class="action-btn btn-flag" onclick="Entity.report(${data.id}, event)"><i class="fa-solid fa-flag"></i></button>
+                    ${deleteBtn}
+                </div>
+            </div>
+            <div class="entity-body">${data.content}</div>
+        `;
+
+        // Olaylar
+        if(data.type === 'library') {
+            el.addEventListener('click', () => Engine.enterRoom(data.title));
+            el.title = "Kütüphaneye Gir";
+        }
+        // Sürüklemeyi engelle (seçim için)
+        el.addEventListener('mousedown', e => e.stopPropagation());
+        
+        document.getElementById('entities-layer').appendChild(el);
+    },
+
+    report: function(id, e) {
+        if(e) e.stopPropagation();
+        UI.confirm("İçeriği Raporla", "Bu içeriği yöneticilere bildirmek istiyor musunuz?", async () => {
+            const { error } = await DB.from('items').update({ is_reported: true }).eq('id', id);
+            if(!error) UI.toast("Rapor iletildi", "success");
+        });
+    },
+    
+    remove: function(id) {
+        const el = document.getElementById(`ent-${id}`);
+        if(el) {
+            el.style.transform = "scale(0)";
+            setTimeout(() => el.remove(), 200);
+        }
+    }
+};
+
+// --- NETWORK & REALTIME ---
+const Network = {
+    channel: null,
+    
+    init: function() {
+        this.channel = DB.channel('global_room', {
+            config: { presence: { key: 'user' } }
+        });
+
+        this.channel
+            // Veritabanı Değişiklikleri
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, payload => {
+                this.handleData(payload);
+            })
+            // Presence (Online Sayısı)
+            .on('presence', { event: 'sync' }, () => {
+                const count = Object.keys(this.channel.presenceState()).length;
+                document.getElementById('online-count').innerText = count;
+            })
+            .subscribe(async (status) => {
+                if(status === 'SUBSCRIBED') {
+                    await this.channel.track({ online_at: new Date().toISOString() });
                 }
-            },
+            });
+    },
 
-            startPingMonitor() {
-                setInterval(async () => {
-                    const t = Date.now();
-                    await supabaseClient.from('items').select('id').limit(1);
-                    document.getElementById('val-ping').innerText = Date.now() - t;
-                }, 5000);
-            },
+    handleData: function(payload) {
+        const { eventType, new: newItem, old: oldItem } = payload;
+        
+        // Admin paneli açıksa listeyi güncelle
+        if(State.isAdmin) Admin.fetchStats();
 
-            async promptCreate() {
-                const t = prompt("Başlık / Oda Adı:"); const c = prompt("İçerik:"); if(!t || !c) return;
-                const type = confirm("Bu bir KÜTÜPHANE mi? (OK: Kütüphane, İptal: Not)") ? 'library' : 'note';
-                await supabaseClient.from('items').insert([{ title: t, content: c, type, x: this.mouse.x, y: this.mouse.y, room_id: this.room }]);
+        if (eventType === 'INSERT') {
+            if(newItem.room_id === State.room) {
+                Entity.create(newItem);
+                UI.toast("Yeni veri alındı", "success");
             }
+        } else if (eventType === 'DELETE') {
+            Entity.remove(oldItem.id);
+        } else if (eventType === 'UPDATE') {
+            if(newItem.room_id === State.room) {
+                Entity.remove(newItem.id); // Önce sil
+                Entity.create(newItem); // Sonra yenisini çiz
+            } else {
+                Entity.remove(newItem.id); // Başka odaya gittiyse sil
+            }
+        }
+    }
+};
+
+// --- UI & MODAL SYSTEM ---
+const UI = {
+    toast: function(msg, type='info') {
+        const t = document.createElement('div');
+        t.className = `toast ${type}`;
+        // İkon seçimi
+        let icon = type === 'success' ? '<i class="fa-solid fa-check"></i>' : 
+                   type === 'error' ? '<i class="fa-solid fa-triangle-exclamation"></i>' : '<i class="fa-solid fa-info-circle"></i>';
+        t.innerHTML = `${icon} <span>${msg}</span>`;
+        document.getElementById('toast-area').appendChild(t);
+        
+        // Animasyon
+        setTimeout(() => t.classList.add('visible'), 10);
+        setTimeout(() => {
+            t.classList.remove('visible');
+            setTimeout(() => t.remove(), 300);
+        }, 3000);
+    },
+
+    closeModal: function() {
+        const ovl = document.getElementById('modal-overlay');
+        ovl.classList.remove('modal-active');
+        setTimeout(() => ovl.style.display = 'none', 300);
+    },
+
+    openCreateModal: function(type) {
+        const ovl = document.getElementById('modal-overlay');
+        const box = document.getElementById('modal-content');
+        const title = type === 'library' ? 'Yeni Kütüphane' : 'Yeni Not';
+        
+        box.innerHTML = `
+            <h3 class="modal-title">${title}</h3>
+            <input id="inp-title" class="modal-input" placeholder="Başlık" autocomplete="off">
+            <textarea id="inp-content" class="modal-input" rows="4" placeholder="İçerik..."></textarea>
+            <div class="modal-btns">
+                <button class="m-btn m-cancel" onclick="UI.closeModal()">İPTAL</button>
+                <button class="m-btn m-confirm" onclick="UI.submitCreate('${type}')">OLUŞTUR</button>
+            </div>
+        `;
+        
+        ovl.style.display = 'flex';
+        setTimeout(() => ovl.classList.add('modal-active'), 10);
+        document.getElementById('inp-title').focus();
+    },
+
+    submitCreate: async function(type) {
+        const t = document.getElementById('inp-title').value;
+        const c = document.getElementById('inp-content').value;
+        
+        if(!t || !c) return UI.toast("Lütfen alanları doldurun", "error");
+        
+        UI.closeModal();
+        
+        const { error } = await DB.from('items').insert([{
+            title: t, content: c, type: type,
+            x: State.ctxPos.x, y: State.ctxPos.y, // Sağ tık koordinatı
+            room_id: State.room
+        }]);
+
+        if(error) UI.toast("Kayıt başarısız", "error");
+    },
+
+    confirm: function(title, msg, onConfirm) {
+        const ovl = document.getElementById('modal-overlay');
+        const box = document.getElementById('modal-content');
+        
+        box.innerHTML = `
+            <h3 class="modal-title" style="color:var(--primary)">${title}</h3>
+            <p style="color:#ccc; font-size:14px; margin-bottom:20px">${msg}</p>
+            <div class="modal-btns">
+                <button class="m-btn m-cancel" onclick="UI.closeModal()">VAZGEÇ</button>
+                <button class="m-btn m-confirm" id="confirm-yes-btn">ONAYLA</button>
+            </div>
+        `;
+        
+        document.getElementById('confirm-yes-btn').onclick = () => {
+            UI.closeModal();
+            onConfirm();
         };
 
-        const Admin = {
-            auth() {
-                if(!Engine.isAdmin) {
-                    if(prompt("MASTER_ACCESS_KEY:") === "Hasan024") { 
-                        localStorage.setItem('isAdm', 'true'); 
-                        alert("Erişim Onaylandı!"); location.reload(); 
-                    }
-                } else { document.getElementById('adm-panel').classList.toggle('open'); }
-            },
-            close() { document.getElementById('adm-panel').classList.remove('open'); },
-            async removeItem(id) { if(confirm("Bu veriyi evrenden silmek istediğine emin misin?")) await supabaseClient.from('items').delete().eq('id', id); },
-            teleport(x, y, r) {
-                if(Engine.room !== r) Engine.loadRoom(r);
-                setTimeout(() => { 
-                    Engine.cam.x = (window.innerWidth/2) - x; 
-                    Engine.cam.y = (window.innerHeight/2) - y; 
-                    Engine.render(); 
-                }, 400);
-            }
-        };
+        ovl.style.display = 'flex';
+        setTimeout(() => ovl.classList.add('modal-active'), 10);
+    },
 
-        window.onload = () => Engine.init();
-    </script>
+    promptPass: function() {
+        const ovl = document.getElementById('modal-overlay');
+        const box = document.getElementById('modal-content');
+        
+        box.innerHTML = `
+            <h3 class="modal-title">Kimlik Doğrulama</h3>
+            <input type="password" id="admin-pass" class="modal-input" style="text-align:center" placeholder="Yönetici Şifresi">
+            <div class="modal-btns">
+                <button class="m-btn m-cancel" onclick="UI.closeModal()">İPTAL</button>
+                <button class="m-btn m-confirm" onclick="Admin.login()">GİRİŞ</button>
+            </div>
+        `;
+        ovl.style.display = 'flex';
+        setTimeout(() => ovl.classList.add('modal-active'), 10);
+        document.getElementById('admin-pass').focus();
+        // Enter desteği
+        document.getElementById('admin-pass').onkeydown = e => { if(e.key === 'Enter') Admin.login(); };
+    }
+};
+
+// --- ADMIN SYSTEM ---
+const Admin = {
+    togglePanel: function() {
+        if(State.isAdmin) {
+            document.body.classList.toggle('dash-open');
+            if(document.body.classList.contains('dash-open')) this.fetchStats();
+        } else {
+            UI.promptPass();
+        }
+    },
+
+    login: function() {
+        const val = document.getElementById('admin-pass').value;
+        if(val === CONFIG.ADMIN_PASS) {
+            localStorage.setItem('meta_admin', 'true');
+            UI.closeModal();
+            UI.toast("Yetki Verildi", "success");
+            setTimeout(() => location.reload(), 500); // UI'ı tamamen yenile
+        } else {
+            UI.toast("Hatalı Şifre", "error");
+        }
+    },
+
+    logout: function() {
+        localStorage.removeItem('meta_admin');
+        location.reload();
+    },
+
+    fetchStats: async function() {
+        // İstatistikler
+        const { count: total } = await DB.from('items').select('*', { count: 'exact', head: true });
+        document.getElementById('stat-total').innerText = total || 0;
+
+        const { data: reports } = await DB.from('items').select('*').eq('is_reported', true);
+        document.getElementById('stat-reported').innerText = reports?.length || 0;
+
+        const feed = document.getElementById('report-feed');
+        feed.innerHTML = '';
+
+        if(reports && reports.length > 0) {
+            reports.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'report-card';
+                div.innerHTML = `
+                    <div class="report-info"><i class="fa-solid fa-triangle-exclamation"></i> ${item.title}</div>
+                    <div style="font-size:10px; color:#888">${item.content.substring(0, 40)}...</div>
+                    <div class="report-actions">
+                        <button class="dash-btn danger" onclick="Admin.deleteItem(${item.id})">SİL</button>
+                        <button class="dash-btn" onclick="Admin.clearReport(${item.id})">TEMİZLE</button>
+                        <button class="dash-btn" style="background:var(--primary); color:#000" onclick="Admin.teleport(${item.x}, ${item.y}, '${item.room_id}')">GİT</button>
+                    </div>
+                `;
+                feed.appendChild(div);
+            });
+        } else {
+            feed.innerHTML = '<div style="text-align:center; color:#444; margin-top:20px; font-size:12px">Bekleyen rapor yok</div>';
+        }
+    },
+
+    deleteItem: function(id, e) {
+        if(e) e.stopPropagation();
+        UI.confirm("Kalıcı Silme", "Bu veri veritabanından tamamen silinecek.", async () => {
+            await DB.from('items').delete().eq('id', id);
+            UI.toast("Veri silindi", "success");
+        });
+    },
+
+    clearReport: async function(id) {
+        await DB.from('items').update({ is_reported: false }).eq('id', id);
+        this.fetchStats();
+        UI.toast("Rapor temizlendi", "success");
+    },
+
+    refreshReports: function() {
+        UI.toast("Panel yenileniyor...", "info");
+        this.fetchStats();
+    },
+
+    teleport: function(x, y, room) {
+        if(State.room !== room) {
+            Engine.enterRoom(room).then(() => {
+                setTimeout(() => this.moveCam(x, y), 500);
+            });
+        } else {
+            this.moveCam(x, y);
+        }
+    },
+
+    moveCam: function(x, y) {
+        State.cam.x = (State.viewport.w / 2) - x;
+        State.cam.y = (State.viewport.h / 2) - y;
+        Engine.render();
+        UI.toast("Işınlanıldı", "success");
+    }
+};
+
+// --- BAŞLAT ---
+window.onload = () => Engine.init();
+
+</script>
 </body>
 </html>
